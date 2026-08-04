@@ -148,6 +148,7 @@ button.more.open::after{content:" ▴"}
       <div class="grid g2" id="tapeGrid"></div>
       <div id="tapeMsg"></div>
     </div>
+    <div id="slabCmp"></div>
     <div id="xyBox" style="display:none">
       <p class="note" style="margin-top:0">Dla niwelatora / tachimetru. Oś X w prawo, oś Y w górę.</p>
       <div class="grid g2" id="xyGrid"></div>
@@ -171,10 +172,20 @@ button.more.open::after{content:" ▴"}
   <div class="body">
     <label>Wariant</label>
     <div class="chips" id="varChips"></div>
-    <div class="grid g3" style="margin-top:12px">
+    <div class="grid g2" style="margin-top:12px">
       <div class="fld"><label>Długość <span class="lblDim"></span> <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomL" placeholder="—"></div>
       <div class="fld"><label>Szerokość <span class="lblDim"></span> <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomW" placeholder="—"></div>
       <div class="fld"><label>Grubość ściany <span class="uu"></span></label><input type="text" inputmode="decimal" id="wall"></div>
+      <div class="fld"><label>Naddatek płyty na stronę <span class="uu"></span></label><input type="text" inputmode="decimal" id="slabAdd" value="0"></div>
+    </div>
+    <p class="hint">Naddatek 0 = płyta ma wymiar zewnętrzny budynku. Wpisz np. 20, jeśli płyta ma wystawać 20 mm z każdej strony.</p>
+    <div class="fld" style="margin-top:10px">
+      <label>Ściana wejściowa (ta z drzwiami)</label>
+      <select id="entry">
+        <option value="0">A–B</option><option value="1">B–C</option>
+        <option value="2">C–D</option><option value="3">D–A</option>
+      </select>
+      <p class="hint" id="entryHint"></p>
     </div>
     <div class="tw" style="margin-top:12px"><table id="tblNom"></table></div>
     <p class="hint" id="nomArea"></p>
@@ -220,7 +231,7 @@ button.more.open::after{content:" ▴"}
       </div>
     </div>
     <div class="grid g2" style="margin-top:10px">
-      <div class="fld"><label>Wymagany zapas płyty <span class="uu"></span></label><input type="text" inputmode="decimal" id="minGap" value="0"></div>
+      <div class="fld"><label>Dopuszczalny nawis ściany poza płytę <span class="uu"></span></label><input type="text" inputmode="decimal" id="over" value="0"></div>
       <div class="fld" style="display:flex;align-items:flex-end">
         <button class="big" id="autoBtn" style="width:100%">Wyznacz ustawienie</button></div>
     </div>
@@ -273,9 +284,20 @@ button.more.open::after{content:" ▴"}
   </div>
 </div>
 
-<!-- 6 -->
+<!-- 6a -->
+<div class="card hero" id="c6a">
+  <h2><span class="num">6</span> Korekta w trakcie trasowania <span class="chev">▾</span></h2>
+  <div class="body">
+    <p class="note" style="margin-top:0">Wytrasowałeś narożnik i chcesz sprawdzić, czy trafiłeś? Zmierz, ile faktycznie wyszło <b>prostopadle od dwóch krawędzi płyty</b>, które schodzą się w tym narożniku, i wpisz. Wypełniaj tylko te narożniki, które już masz — reszta może zostać pusta.</p>
+    <div id="liveGrid"></div>
+    <div id="liveBox"></div>
+    <div class="btnrow"><button class="sec sm" id="clearLive">Wyczyść</button></div>
+  </div>
+</div>
+
+<!-- 6b -->
 <div class="card collapsed" id="c6">
-  <h2><span class="num">6</span> Kontrola po wytrasowaniu <span class="chev">▾</span></h2>
+  <h2><span class="num">7</span> Kontrola całości po wytrasowaniu <span class="chev">▾</span></h2>
   <div class="body">
     <p class="note" style="margin-top:0">Po naciągnięciu żyłek zmierz wytrasowany prostokąt <b>zewnętrzny</b> i wpisz. Narzędzie pokaże odchyłki i który narożnik poprawić.</p>
     <div class="grid g2" id="ctrlGrid"></div>
@@ -286,7 +308,7 @@ button.more.open::after{content:" ▴"}
 
 <!-- 7 -->
 <div class="card collapsed" id="c7">
-  <h2><span class="num">7</span> Kolejność prac <span class="chev">▾</span></h2>
+  <h2><span class="num">8</span> Kolejność prac <span class="chev">▾</span></h2>
   <div class="body">
     <div id="checklist"></div>
     <div class="btnrow"><button class="sec sm" id="ckReset">Odznacz wszystko</button></div>
@@ -295,7 +317,7 @@ button.more.open::after{content:" ▴"}
 
 <!-- 8 -->
 <div class="card collapsed" id="c8">
-  <h2><span class="num">8</span> Zapisane zestawy <span class="chev">▾</span></h2>
+  <h2><span class="num">9</span> Zapisane zestawy <span class="chev">▾</span></h2>
   <div class="body">
     <div class="grid g2">
       <div class="fld"><label>Nazwa zestawu</label><input type="text" id="setName" placeholder="np. Płyta – pomiar poranny"></div>
@@ -307,7 +329,7 @@ button.more.open::after{content:" ▴"}
 
 <!-- 9 -->
 <div class="card collapsed" id="c9">
-  <h2><span class="num">9</span> Raport <span class="chev">▾</span></h2>
+  <h2><span class="num">10</span> Raport <span class="chev">▾</span></h2>
   <div class="body">
     <textarea id="report" readonly></textarea>
     <div class="btnrow">
@@ -329,6 +351,13 @@ var UF={mm:1,cm:10,m:1000};
 var DEC={mm:1,cm:2,m:3};
 var LETTERS=["A","B","C","D"];
 var EDGE=["A–B","B–C","C–D","D–A"];
+/* nazwa ściany względem wskazanej ściany wejściowej; lewa/prawa jak na rysunku */
+function sideName(j){
+  var d=(j-M.entry+4)%4;
+  if(M.mirror && (d===1||d===3)) d=(d===1)?3:1;
+  return ["wejście","prawa","tył","lewa"][d];
+}
+function edgeLabel(j){ return EDGE[j]+" ("+sideName(j)+")"; }
 var CONTS=["out","in"];
 var CNAME={out:"zewnętrzny",in:"wewnętrzny"};
 var CCOL={out:"#1b4a7a",in:"#2f8f5b"};
@@ -345,9 +374,13 @@ var M={
   tol:{s:2,d:2,a:0.10},
   inputMode:"tape",
   tape:emptyTape(), work:null,
-  crit:"maxmin", baseEdge:0, baseOff:0, minGap:0,
+  crit:"maxmin", baseEdge:0, baseOff:0,
+  slabAdd:0,   /* o ile płyta ma być większa od obrysu zewnętrznego, na stronę */
+  over:0,      /* dopuszczalny nawis ściany poza płytę */
   pl:{tx:0,ty:0,th:0,init:false},
   amp:1,
+  entry:0,                                   /* która krawędź to ściana wejściowa */
+  live:{A:[null,null],B:[null,null],C:[null,null],D:[null,null]},
   ctrl:emptyTape(),
   checks:{}, sets:[]
 };
@@ -361,6 +394,7 @@ function load(){
     for(var v in DEFAULT_VARIANTS){ if(!M.variants[v]) M.variants[v]={L:null,W:null}; }
     if(!M.tape) M.tape=emptyTape();
     if(!M.ctrl) M.ctrl=emptyTape();
+    if(!M.live) M.live={A:[null,null],B:[null,null],C:[null,null],D:[null,null]};
   }catch(e){}
 }
 
@@ -401,6 +435,11 @@ function dimOf(c){
   return c==="out" ? {L:d.L,W:d.W} : {L:d.L-2*M.wall, W:d.W-2*M.wall};
 }
 function dimOK(){ var d=dimOut(); return !!(d && d.L>0 && d.W>0 && d.L-2*M.wall>0 && d.W-2*M.wall>0); }
+/* projektowy wymiar płyty = obrys zewnętrzny + naddatek na stronę */
+function dimSlab(){
+  var d=dimOut(); if(!d) return {L:null,W:null};
+  return {L:d.L+2*M.slabAdd, W:d.W+2*M.slabAdd};
+}
 function nomDiag(c){ var d=dimOf(c); return (d.L>0&&d.W>0)? Math.sqrt(d.L*d.L+d.W*d.W) : null; }
 /* obrysy budynku w układzie lokalnym — wewnętrzny zagnieżdżony w zewnętrznym */
 function nomPts(c){
@@ -539,7 +578,7 @@ function sidesOf(P,c){
   var d=dimOf(c), tg=[d.L,d.W,d.L,d.W], o=[];
   for(var i=0;i<4;i++){
     var L=d2(P[i],P[(i+1)%4]);
-    o.push({k:EDGE[i], L:L, t:d.L>0?tg[i]:null, d:d.L>0?L-tg[i]:null});
+    o.push({k:edgeLabel(i), L:L, t:d.L>0?tg[i]:null, d:d.L>0?L-tg[i]:null});
   }
   return o;
 }
@@ -571,10 +610,14 @@ function el(t,a,x){
 
 /* ============================ RENDER ============================ */
 function render(){
-  renderHeader(); renderVariants(); renderNominal(); renderTape(); renderXY();
-  renderFit(); renderMark(); renderSVG(); renderCtrl(); renderReport(); save();
+  renderHeader(); renderVariants(); renderNominal(); renderTape(); renderXY(); renderSlabCmp();
+  renderFit(); renderMark(); renderSVG(); renderLiveGrid(); renderLiveBox();
+  renderCtrl(); renderReport(); save();
 }
-function renderLive(){ renderHeader(); renderFit(); renderMark(); renderSVG(); renderCtrlBox(); renderReport(); save(); }
+function renderLive(){
+  renderHeader(); renderSlabCmp(); renderFit(); renderMark(); renderSVG();
+  renderLiveGrid(); renderLiveBox(); renderCtrlBox(); renderReport(); save();
+}
 
 function renderHeader(){
   $("#hdrVar").textContent=VAR_LABEL[M.variant]+(M.mirror?" · lustro":"");
@@ -591,8 +634,12 @@ function renderHeader(){
   $("#mirBtn").classList.toggle("sec",!M.mirror);
   $$(".lblDim").forEach(function(s){ s.textContent = M.baseDim==="out"?"zewn.":"wewn."; });
   $("#baseEdge").value=String(M.baseEdge);
+  $("#entry").value=String(M.entry);
+  $$("#baseEdge option").forEach(function(o,i){ o.textContent=edgeLabel(i); });
+  $("#entryHint").textContent="Wtedy: "+[0,1,2,3].map(function(i){ return EDGE[i]+" = "+sideName(i); }).join(" · ")+
+    ". Lewa i prawa jak na rysunku w sekcji 5.";
   if(document.activeElement!==$("#baseOff")) $("#baseOff").value=fin(M.baseOff);
-  if(document.activeElement!==$("#minGap")) $("#minGap").value=fin(M.minGap);
+  if(document.activeElement!==$("#over")) $("#over").value=fin(M.over);
 }
 function renderVariants(){
   var box=$("#varChips"); box.innerHTML="";
@@ -608,6 +655,7 @@ function renderNominal(){
   if(document.activeElement!==$("#nomL")) $("#nomL").value=fin(n.L);
   if(document.activeElement!==$("#nomW")) $("#nomW").value=fin(n.W);
   if(document.activeElement!==$("#wall")) $("#wall").value=fin(M.wall);
+  if(document.activeElement!==$("#slabAdd")) $("#slabAdd").value=fin(M.slabAdd);
   if(document.activeElement!==$("#tolS")) $("#tolS").value=fin(M.tol.s);
   if(document.activeElement!==$("#tolD")) $("#tolD").value=fin(M.tol.d);
   if(document.activeElement!==$("#tolA")) $("#tolA").value=String(M.tol.a).replace(".",",");
@@ -625,6 +673,14 @@ function renderNominal(){
     var td=el("td",null,nomDiag(c)!==null?f(nomDiag(c)):"—"); td.style.fontWeight="800";
     tr.appendChild(td); tb.appendChild(tr);
   });
+  var ds=dimSlab(), trs=el("tr");
+  trs.style.borderTop="2px solid #c9d2dc";
+  var tds=el("td",null,"PŁYTA (projekt)"); tds.style.color=SLABCOL;
+  trs.appendChild(tds);
+  trs.appendChild(el("td",null,ds.L>0?f(ds.L):"—"));
+  trs.appendChild(el("td",null,ds.W>0?f(ds.W):"—"));
+  var tdd=el("td",null,ds.L>0?f(Math.sqrt(ds.L*ds.L+ds.W*ds.W)):"—"); tdd.style.fontWeight="800";
+  trs.appendChild(tdd); tb.appendChild(trs);
   t.appendChild(tb);
   var d=dimOut();
   $("#nomArea").textContent = d ? "Powierzchnia zabudowy "+((d.L*d.W)/1e6).toFixed(2).replace(".",",")+" m² · obwód "+fu(2*(d.L+d.W)) : "";
@@ -662,6 +718,41 @@ function renderTapeMsg(){
     box.appendChild(el("div",{class:"msg i"},"Bok C–D wyliczony z pozostałych: "+fu(r.cd)+". Zmierz go i wpisz, żeby sprawdzić poprawność pomiaru."));
   }
 }
+/* zmierzona płyta kontra płyta projektowa */
+function renderSlabCmp(){
+  var box=$("#slabCmp"); box.innerHTML="";
+  var S=slab(); if(!S||!dimOK()) return;
+  var ds=dimSlab(), tg=[ds.L,ds.W,ds.L,ds.W];
+  var dgn=Math.sqrt(ds.L*ds.L+ds.W*ds.W);
+  var tw=el("div",{class:"tw"}), t=el("table");
+  var h=el("thead"), hr=el("tr");
+  ["Płyta","Pomiar","Projekt","Różnica"].forEach(function(x){ hr.appendChild(el("th",null,x)); });
+  h.appendChild(hr); t.appendChild(h);
+  var tb=el("tbody"), maly=0;
+  for(var i=0;i<4;i++){
+    var L=d2(S[i],S[(i+1)%4]), df=L-tg[i], tr=el("tr");
+    if(df<-M.tol.s){ tr.className="rbad"; maly=Math.max(maly,-df); }
+    tr.appendChild(el("td",null,edgeLabel(i)));
+    tr.appendChild(el("td",null,f(L,1)));
+    tr.appendChild(el("td",null,f(tg[i],1)));
+    tr.appendChild(el("td",{class:df<-M.tol.s?"bad":"ok"},fs(df,1)));
+    tb.appendChild(tr);
+  }
+  [["A–C",d2(S[0],S[2])],["B–D",d2(S[1],S[3])]].forEach(function(p){
+    var df=p[1]-dgn, tr=el("tr");
+    tr.appendChild(el("td",null,p[0]));
+    tr.appendChild(el("td",null,f(p[1],1)));
+    tr.appendChild(el("td",null,f(dgn,1)));
+    tr.appendChild(el("td",null,fs(df,1)));
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); tw.appendChild(t); box.appendChild(tw);
+  if(maly>0)
+    box.appendChild(el("div",{class:"msg w"},
+      "Płyta jest miejscami mniejsza od projektowej — najwięcej o "+fu(maly)+
+      ". Ściana może wyjść poza krawędź; ile dokładnie i gdzie, pokaże sekcja 3."));
+}
+
 function renderXY(){
   var g=$("#xyGrid");
   if(g.children.length===0){
@@ -696,10 +787,10 @@ function renderFit(){
   var pl=placement(); if(!pl) return;
   var v=gapValues(pl); if(!v) return;
   var mn=Math.min.apply(null,v), mx=Math.max.apply(null,v);
-  var ok=mn>=M.minGap;
+  var ok=mn>=-M.over;
   var s1=el("div",{class:"stat "+(ok?"good":"bad")});
-  s1.appendChild(el("div",{class:"k"},"Najmniejszy zapas"));
-  s1.appendChild(el("div",{class:"v"},fu(mn)));
+  s1.appendChild(el("div",{class:"k"},mn<0?"Największy nawis":"Najmniejszy zapas"));
+  s1.appendChild(el("div",{class:"v"},fu(Math.abs(mn))));
   box.appendChild(s1);
   var s2=el("div",{class:"stat"});
   s2.appendChild(el("div",{class:"k"},"Największy zapas"));
@@ -709,15 +800,24 @@ function renderFit(){
   s3.appendChild(el("div",{class:"k"},"Rozrzut"));
   s3.appendChild(el("div",{class:"v"},fu(mx-mn)));
   box.appendChild(s3);
-  if(mn<0){
+
+  /* gdzie wypada najgorsze miejsce */
+  var G=gaps("out",placement()), worst=null;
+  if(G) G.forEach(function(e){
+    for(var k=0;k<2;k++) if(!worst||e.g[k]<worst.v) worst={v:e.g[k], edge:edgeLabel(e.edge), at:e.at[k]};
+  });
+  var gdzie = worst ? " Najgorsze miejsce: krawędź "+worst.edge+" przy narożniku "+worst.at+"." : "";
+
+  if(mn < -M.over){
     msg.appendChild(el("div",{class:"msg e"},
-      "Budynek nie mieści się na płycie — w najgorszym miejscu wychodzi poza krawędź o "+fu(-mn)+
-      ". Sprawdź pomiary płyty, zanim zaczniesz trasować."));
-  } else if(!ok){
+      "Ściana wychodzi poza płytę o "+fu(-mn)+", dopuszczalne "+fu(M.over)+"."+gdzie+
+      " Płyta jest w tym miejscu za mała — do decyzji, czy dopuszczasz nawis, czy poprawiasz płytę."));
+  } else if(mn<0){
     msg.appendChild(el("div",{class:"msg w"},
-      "Mieści się, ale najmniejszy zapas "+fu(mn)+" jest poniżej wymaganych "+fu(M.minGap)+"."));
+      "Ściana wychodzi poza płytę o "+fu(-mn)+" — mieści się w dopuszczalnym nawisie "+fu(M.over)+"."+gdzie));
   } else {
-    msg.appendChild(el("div",{class:"msg g"},"Budynek mieści się na płycie. Miary do odmierzenia są w sekcji 4."));
+    msg.appendChild(el("div",{class:"msg g"},
+      "Cały budynek mieści się na płycie, najmniejszy zapas "+fu(mn)+"."+gdzie+" Miary do odmierzenia są w sekcji 4."));
   }
 }
 
@@ -735,16 +835,17 @@ function renderMark(){
     var G=gaps(c,pl); if(!G) return;
     box.appendChild(el("div",{class:"sub2 "+(c==="out"?"zew":"wew")},"Linia ściany "+CNAME[c]));
     G.forEach(function(e){
-      var bad = Math.min(e.g[0],e.g[1]) < (c==="out"?M.minGap:0);
+      var bad = Math.min(e.g[0],e.g[1]) < (c==="out"? -M.over : 0);
       var d=el("div",{class:"step"+(bad?" bad":"")});
-      d.appendChild(el("h4",null,"Krawędź płyty "+EDGE[e.edge]));
-      var m1=el("div",{class:"m"});
-      m1.innerHTML="od narożnika <b>"+e.at[0]+"</b> odmierz <b>"+f(e.g[0])+" "+u()+"</b>";
-      var m2=el("div",{class:"m"});
-      m2.innerHTML="od narożnika <b>"+e.at[1]+"</b> odmierz <b>"+f(e.g[1])+" "+u()+"</b>";
-      d.appendChild(m1); d.appendChild(m2);
-      if(e.g[0]<0||e.g[1]<0)
-        d.appendChild(el("p",{class:"hint"},"Wartość ujemna = ściana wypada POZA płytą. Tak trasować się nie da."));
+      d.appendChild(el("h4",null,"Krawędź płyty "+edgeLabel(e.edge)));
+      [0,1].forEach(function(k){
+        var g=e.g[k], m=el("div",{class:"m"});
+        m.innerHTML = "od narożnika <b>"+e.at[k]+"</b> odmierz <b>"+f(Math.abs(g))+" "+u()+"</b> "+
+                      (g<-0.05 ? "<span style='color:#c0261f'>NA ZEWNĄTRZ płyty</span>" : "do środka");
+        d.appendChild(m);
+      });
+      if(e.g[0]<-0.05||e.g[1]<-0.05)
+        d.appendChild(el("p",{class:"hint"},"Ściana wypada poza krawędzią płyty — w tym miejscu budynek będzie nawisał."));
       box.appendChild(d);
     });
   });
@@ -860,7 +961,7 @@ function renderSVG(){
     var mx=(A.x+B.x)/2, my=(A.y+B.y)/2, dx=B.x-A.x, dy=B.y-A.y, L=Math.sqrt(dx*dx+dy*dy)||1;
     var nx=sgn*(dy/L), ny=sgn*(-dx/L);
     add("text",{x:mx+nx*30,y:my+ny*30,"text-anchor":"middle","dominant-baseline":"middle",
-      "font-size":24,"font-weight":800,fill:SLABCOL}, EDGE[i]+"  "+f(d2(S[i],S[j]),1));
+      "font-size":24,"font-weight":800,fill:SLABCOL}, EDGE[i]+" "+sideName(i)+"  "+f(d2(S[i],S[j]),1));
   }
   var cxx=0,cyy=0; S.forEach(function(p){ var t=sc(p); cxx+=t.x; cyy+=t.y; }); cxx/=4; cyy/=4;
   var G2=pl?gaps("out",pl):null;
@@ -878,6 +979,121 @@ function renderSVG(){
   if(M.amp>1) add("text",{x:14,y:50,"font-size":18,"font-weight":800,fill:"#a86000"},"zapasy powiększone ×"+M.amp+" (tylko rysunek)");
   if(M.mirror) add("text",{x:W-14,y:26,"text-anchor":"end","font-size":19,"font-weight":800,fill:"#a86000"},"WIDOK LUSTRZANY");
   wrap.appendChild(svg);
+}
+
+/* ---- korekta w trakcie trasowania ----
+   Narożnik i leży przy krawędziach płyty (i-1) oraz i. Mierzymy jego odległości
+   prostopadłe do tych dwóch krawędzi — to wyznacza punkt jednoznacznie,
+   niezależnie od tego, czy płyta jest prostokątna. */
+function edgeDist(Q,j){                       /* odległość punktu od krawędzi j, dodatnia do środka */
+  var S=slab(); if(!S) return null;
+  var N=slabNormals(S);
+  return N[j].x*(Q.x-S[j].x) + N[j].y*(Q.y-S[j].y);
+}
+function cornerTargets(){                      /* [od krawędzi i, od krawędzi i-1] dla każdego narożnika */
+  var pl=placement(); if(!pl) return null;
+  var P=placeNom("out",pl), out=[];
+  for(var i=0;i<4;i++) out.push([edgeDist(P[i],i), edgeDist(P[i],(i+3)%4)]);
+  return out;
+}
+function cornerFromDists(i,m1,m2){             /* punkt o zadanych odległościach od obu krawędzi */
+  var S=slab(); if(!S) return null;
+  var N=slabNormals(S), j=(i+3)%4;
+  var a1=N[i].x, b1=N[i].y, c1=m1 + N[i].x*S[i].x + N[i].y*S[i].y;
+  var a2=N[j].x, b2=N[j].y, c2=m2 + N[j].x*S[j].x + N[j].y*S[j].y;
+  var det=a1*b2-a2*b1;
+  if(Math.abs(det)<1e-9) return null;
+  return {x:(c1*b2-c2*b1)/det, y:(a1*c2-a2*c1)/det};
+}
+function renderLiveGrid(){
+  var box=$("#liveGrid"); box.innerHTML="";
+  var T=cornerTargets();
+  if(!T){ box.appendChild(el("div",{class:"msg i"},"Najpierw wymiary budynku i pomiary płyty — wtedy pojawią się pola.")); return; }
+  for(var i=0;i<4;i++){
+    (function(i){
+      var d=el("div",{class:"step"});
+      d.appendChild(el("h4",null,"Narożnik "+LETTERS[i]));
+      var g=el("div",{class:"grid g2"});
+      [[0,i],[1,(i+3)%4]].forEach(function(p){
+        var slot=p[0], ej=p[1];
+        var fl=el("div",{class:"fld"});
+        var lb=el("label"); lb.innerHTML="od krawędzi "+edgeLabel(ej)+' <span class="uu">['+u()+']</span>';
+        var inp=el("input",{type:"text",inputmode:"decimal",placeholder:"cel "+f(T[i][slot])});
+        inp.value=fin(M.live[LETTERS[i]][slot]);
+        inp.addEventListener("input",function(){
+          M.live[LETTERS[i]][slot]=toMM(inp.value);
+          renderLiveBox(); renderReport(); save();
+        });
+        fl.appendChild(lb); fl.appendChild(inp); g.appendChild(fl);
+      });
+      d.appendChild(g);
+      d.appendChild(el("p",{class:"hint"},"Cel: "+f(T[i][0])+" od "+edgeLabel(i)+" i "+f(T[i][1])+" od "+edgeLabel((i+3)%4)+" ["+u()+"]"));
+      box.appendChild(d);
+    })(i);
+  }
+}
+function renderLiveBox(){
+  var box=$("#liveBox"); box.innerHTML="";
+  var T=cornerTargets(); if(!T) return;
+  var got=[], maxr=0;
+  for(var i=0;i<4;i++){
+    var m=M.live[LETTERS[i]];
+    if(!(typeof m[0]==="number" && typeof m[1]==="number")) continue;
+    var Q=cornerFromDists(i,m[0],m[1]); if(!Q) continue;
+    var kor1=T[i][0]-m[0], kor2=T[i][1]-m[1];
+    var P=placeNom("out",placement())[i];
+    var r=d2(P,Q);
+    maxr=Math.max(maxr,r);
+    got.push({i:i,k:LETTERS[i],Q:Q,kor1:kor1,kor2:kor2,r:r});
+  }
+  if(!got.length){
+    box.appendChild(el("div",{class:"msg i"},"Wpisz obie odległości przy dowolnym narożniku, a policzę poprawkę."));
+    return;
+  }
+  box.appendChild(el("div",{class:"msg "+(maxr<=M.tol.s?"g":"w")},
+    maxr<=M.tol.s ? "Wszystkie wpisane narożniki mieszczą się w tolerancji "+fu(M.tol.s)+"."
+                  : "Największe odchylenie: "+fu(maxr)+". Poprawki poniżej."));
+  got.forEach(function(x){
+    var d=el("div",{class:"step"+(x.r<=M.tol.s?"":" bad")});
+    d.appendChild(el("h4",null,"Narożnik "+x.k+" — odchylony o "+fu(x.r)));
+    if(x.r<=M.tol.s){ d.appendChild(el("div",{class:"m"},"✔ w tolerancji, zostaw")); }
+    else{
+      [[x.kor1, x.i],[x.kor2,(x.i+3)%4]].forEach(function(p){
+        if(Math.abs(p[0])<0.5) return;
+        var e2=el("div",{class:"m"});
+        e2.innerHTML = (p[0]>0 ? "odsuń od krawędzi " : "dosuń do krawędzi ")+edgeLabel(p[1])+
+                       " o <b>"+f(Math.abs(p[0]))+" "+u()+"</b>";
+        d.appendChild(e2);
+      });
+    }
+    box.appendChild(d);
+  });
+  /* co wychodzi między już wytrasowanymi narożnikami */
+  if(got.length>=2){
+    var tw=el("div",{class:"tw"}), t=el("table");
+    var h=el("thead"), hr=el("tr");
+    ["Między narożnikami","Wyszło","Projekt","Różnica"].forEach(function(z){ hr.appendChild(el("th",null,z)); });
+    h.appendChild(hr); t.appendChild(h);
+    var tb=el("tbody"), dO=dimOf("out");
+    for(var a=0;a<got.length;a++) for(var b=a+1;b<got.length;b++){
+      var ia=got[a].i, ib=got[b].i, dd=(ib-ia+4)%4;
+      /* boki: A–B i C–D to długość, B–C i D–A to szerokość; para naprzeciwległa to przekątna */
+      var cel;
+      if(dd===2) cel=Math.sqrt(dO.L*dO.L+dO.W*dO.W);
+      else cel = ((ia===0&&ib===1)||(ia===2&&ib===3)) ? dO.L : dO.W;
+      var L=d2(got[a].Q,got[b].Q), df=(cel>0)?L-cel:null;
+      var tr=el("tr"), bad=df!==null&&Math.abs(df)>(dd===2?M.tol.d:M.tol.s);
+      if(bad) tr.className="rbad";
+      tr.appendChild(el("td",null,got[a].k+"–"+got[b].k+(dd===2?" (przekątna)":"")));
+      tr.appendChild(el("td",null,f(L,1)));
+      tr.appendChild(el("td",null,cel?f(cel,1):"—"));
+      tr.appendChild(el("td",{class:df===null?"":(bad?"bad":"ok")},df!==null?fs(df,1):"—"));
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); tw.appendChild(t);
+    box.appendChild(el("p",{class:"hint"},"Odległości między narożnikami, które już wytrasowałeś:"));
+    box.appendChild(tw);
+  }
 }
 
 /* kontrola po wytrasowaniu */
@@ -955,7 +1171,8 @@ function renderReport(){
   L.push("TRASOWANIE BUDYNKU NA PŁYCIE — Masywny Dom");
   L.push("Data: "+new Date().toLocaleString("pl-PL"));
   L.push("Wariant: "+VAR_LABEL[M.variant]+(M.mirror?" (lustrzany)":"")+"   Jednostka: "+u());
-  L.push("Ściana: "+f(M.wall)+" "+u()+"   Wymiar wpisany: "+CNAME[M.baseDim]);
+  L.push("Ściana: "+f(M.wall)+" "+u()+"   Wymiar wpisany: "+CNAME[M.baseDim]+
+         "   Naddatek płyty: "+f(M.slabAdd)+" "+u()+"/stronę");
   L.push("Tolerancje: bok ±"+f(M.tol.s)+" "+u()+", przekątna ±"+f(M.tol.d)+" "+u()+", kąt ±"+String(M.tol.a).replace(".",",")+"°");
   L.push("");
   L.push("BUDYNEK");
@@ -967,25 +1184,25 @@ function renderReport(){
   var S=slab();
   if(!S){ L.push("Brak pomiarów płyty."); $("#report").value=L.join("\n"); return; }
   L.push("PŁYTA (pomiar)");
-  for(var i=0;i<4;i++) L.push("  "+EDGE[i]+" : "+f(d2(S[i],S[(i+1)%4]),1));
+  for(var i=0;i<4;i++) L.push("  "+edgeLabel(i)+" : "+f(d2(S[i],S[(i+1)%4]),1));
   L.push("  A–C : "+f(d2(S[0],S[2]),1)+"   B–D : "+f(d2(S[1],S[3]),1)+
          "   różnica "+f(Math.abs(d2(S[0],S[2])-d2(S[1],S[3])),1));
   L.push("");
   var pl=(dimOK()?placement():null);
   if(!pl){ $("#report").value=L.join("\n"); return; }
   var critName={maxmin:"maksymalny zapas", center:"równo dookoła",
-    edge:"od krawędzi "+EDGE[M.baseEdge]+" w odległości "+f(M.baseOff)+" "+u()};
+    edge:"od krawędzi "+edgeLabel(M.baseEdge)+" w odległości "+f(M.baseOff)+" "+u()};
   L.push("USTAWIENIE: "+critName[M.crit]);
   var v=gapValues(pl);
   L.push("  Zapas min "+f(Math.min.apply(null,v))+" / max "+f(Math.max.apply(null,v))+" "+u()+
-         "   (wymagany "+f(M.minGap)+")");
+         "   (dopuszczalny nawis "+f(M.over)+")");
   L.push("");
   L.push("MIARY DO ODMIERZENIA — prostopadle od krawędzi płyty, do środka ["+u()+"]");
   CONTS.forEach(function(c){
     var G=gaps(c,pl); if(!G) return;
     L.push("  Linia ściany "+CNAME[c]+":");
     G.forEach(function(e){
-      L.push("    krawędź "+EDGE[e.edge]+" :  od "+e.at[0]+" = "+f(e.g[0])+"   od "+e.at[1]+" = "+f(e.g[1]));
+      L.push("    krawędź "+edgeLabel(e.edge)+" :  od "+e.at[0]+" = "+f(e.g[0])+"   od "+e.at[1]+" = "+f(e.g[1]));
     });
   });
   L.push("");
@@ -1103,9 +1320,15 @@ function init(){
   $("#tolS").addEventListener("input",function(){ var v=toMM(this.value); if(v!==null) M.tol.s=v; renderTapeMsg(); renderLive(); });
   $("#tolD").addEventListener("input",function(){ var v=toMM(this.value); if(v!==null) M.tol.d=v; renderLive(); });
   $("#tolA").addEventListener("input",function(){ var v=parseFloat(String(this.value).replace(",",".")); if(isFinite(v)) M.tol.a=v; renderLive(); });
-  $("#minGap").addEventListener("input",function(){ var v=toMM(this.value); M.minGap=(v===null?0:v); renderLive(); });
+  $("#over").addEventListener("input",function(){ var v=toMM(this.value); M.over=(v===null?0:Math.abs(v)); renderLive(); });
+  $("#slabAdd").addEventListener("input",function(){ var v=toMM(this.value); M.slabAdd=(v===null?0:v); renderNominal(); renderSlabCmp(); renderLive(); });
   $("#baseOff").addEventListener("input",function(){ var v=toMM(this.value); M.baseOff=(v===null?0:v); M.pl.init=false; renderLive(); });
   $("#baseEdge").addEventListener("change",function(){ M.baseEdge=+this.value; M.pl.init=false; renderLive(); });
+  $("#entry").addEventListener("change",function(){ M.entry=+this.value; render(); });
+  $("#clearLive").onclick=function(){
+    M.live={A:[null,null],B:[null,null],C:[null,null],D:[null,null]};
+    renderLiveGrid(); renderLiveBox(); renderReport(); save();
+  };
 
   $("#saveVar").onclick=function(){ save(); alert("Wymiary wariantu "+VAR_LABEL[M.variant]+" zapisane."); };
   $("#copyVar").onclick=function(){ var n=M.variants[M.variant]; M.variants.PROJ={L:n.L,W:n.W}; M.variant="PROJ"; M.pl.init=false; render(); };
