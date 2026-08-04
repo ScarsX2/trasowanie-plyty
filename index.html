@@ -112,6 +112,13 @@ svg{display:block;width:100%;height:auto;background:#fff;border-radius:10px;touc
 .sub2.wew{border-color:var(--bud2);color:var(--bud2)}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;font-weight:700;margin-top:6px}
 .legend i{display:inline-block;width:22px;height:0;border-top:3px solid;vertical-align:middle;margin-right:5px}
+button.more{background:none;border:0;color:var(--blue2);font-size:14px;font-weight:700;
+  padding:10px 0;margin-top:8px;min-height:40px;text-decoration:underline}
+button.more::after{content:" ▾"}
+button.more.open::after{content:" ▴"}
+.morebox{display:none;border-top:1px dashed var(--line);padding-top:10px;margin-top:2px}
+.morebox.open{display:block}
+.lblDim{color:var(--blue2)}
 @media print{header{position:static}.card{break-inside:avoid}button,.nudge,.btnrow{display:none!important}
   .card.collapsed > .body{display:block}}
 </style>
@@ -133,58 +140,63 @@ svg{display:block;width:100%;height:auto;background:#fff;border-radius:10px;touc
 <div class="wrap">
 
 <!-- 1 -->
-<div class="card" id="c1">
-  <h2><span class="num">1</span> Budynek — wymiary projektowe <span class="chev">▾</span></h2>
+<div class="card" id="c2">
+  <h2><span class="num">1</span> Płyta — pomiary z budowy <span class="chev">▾</span></h2>
   <div class="body">
-    <label>Wariant</label>
-    <div class="chips" id="varChips"></div>
-    <div class="btnrow" style="margin-top:8px">
-      <button class="sec sm" id="mirBtn">Wariant lustrzany: NIE</button>
+    <p class="note" style="margin-top:0">Zmierz <b>wylaną płytę</b>: 4 boki i obie przekątne. Narożniki oznacz na płycie jako A, B, C, D — <b>przeciwnie do ruchu wskazówek zegara</b>, A w lewym dolnym rogu wg rzutu.</p>
+    <div id="tapeBox">
+      <div class="grid g2" id="tapeGrid"></div>
+      <div id="tapeMsg"></div>
     </div>
-    <label style="margin-top:14px">Wymiar wpisywany</label>
-    <div class="seg" id="baseSeg">
-      <button data-base="out" class="on">Zewnętrzny</button>
-      <button data-base="in">Wewnętrzny</button>
+    <div id="xyBox" style="display:none">
+      <p class="note" style="margin-top:0">Dla niwelatora / tachimetru. Oś X w prawo, oś Y w górę.</p>
+      <div class="grid g2" id="xyGrid"></div>
+      <div class="btnrow"><button class="sec sm" id="fromTape">Przepisz z pomiarów taśmą</button></div>
     </div>
-    <div class="grid g3" style="margin-top:10px">
-      <div class="fld"><label>Długość <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomL" placeholder="—"></div>
-      <div class="fld"><label>Szerokość <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomW" placeholder="—"></div>
-      <div class="fld"><label>Grubość ściany <span class="uu"></span></label><input type="text" inputmode="decimal" id="wall"></div>
-    </div>
-    <div class="tw" style="margin-top:12px"><table id="tblNom"></table></div>
-    <p class="hint" id="nomArea"></p>
-    <label style="margin-top:14px">Tolerancje kontrolne</label>
-    <div class="grid g3">
-      <div class="fld"><label>Bok ± <span class="uu"></span></label><input type="text" inputmode="decimal" id="tolS"></div>
-      <div class="fld"><label>Przekątna ± <span class="uu"></span></label><input type="text" inputmode="decimal" id="tolD"></div>
-      <div class="fld"><label>Kąt ± °</label><input type="text" inputmode="decimal" id="tolA"></div>
-    </div>
-    <p class="note"><b>MD86 = 11620 × 8260 zewn.</b> odczytane z rzutu — <b>zweryfikuj</b>. MD69 i MD100 są puste, do uzupełnienia. Wymiary zapisują się w pamięci przeglądarki.</p>
-    <div class="btnrow">
-      <button class="sec sm" id="saveVar">Zapisz wariant</button>
-      <button class="sec sm" id="copyVar">Kopiuj do „Aktualny projekt”</button>
+    <button class="more" data-more="slabMore">Więcej</button>
+    <div class="morebox" id="slabMore">
+      <label>Sposób wprowadzania</label>
+      <div class="seg" id="modeSeg">
+        <button data-mode="tape" class="on">Taśmą</button>
+        <button data-mode="xy">Współrzędne X/Y</button>
+      </div>
+      <div class="btnrow"><button class="sec sm" id="clearTape">Wyczyść pomiary płyty</button></div>
     </div>
   </div>
 </div>
 
 <!-- 2 -->
-<div class="card" id="c2">
-  <h2><span class="num">2</span> Płyta — pomiary z budowy <span class="chev">▾</span></h2>
+<div class="card" id="c1">
+  <h2><span class="num">2</span> Budynek — wymiary projektowe <span class="chev">▾</span></h2>
   <div class="body">
-    <p class="note" style="margin-top:0">Zmierz <b>wylaną płytę</b>: 4 boki i obie przekątne. Narożniki płyty oznacz na budowie jako A, B, C, D — <b>przeciwnie do ruchu wskazówek zegara</b>, A w lewym dolnym rogu wg rzutu.</p>
-    <div class="seg" id="modeSeg">
-      <button data-mode="tape" class="on">Taśmą</button>
-      <button data-mode="xy">Współrzędne X/Y</button>
+    <label>Wariant</label>
+    <div class="chips" id="varChips"></div>
+    <div class="grid g3" style="margin-top:12px">
+      <div class="fld"><label>Długość <span class="lblDim"></span> <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomL" placeholder="—"></div>
+      <div class="fld"><label>Szerokość <span class="lblDim"></span> <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomW" placeholder="—"></div>
+      <div class="fld"><label>Grubość ściany <span class="uu"></span></label><input type="text" inputmode="decimal" id="wall"></div>
     </div>
-    <div id="tapeBox" style="margin-top:12px">
-      <div class="grid g2" id="tapeGrid"></div>
-      <div id="tapeMsg"></div>
-      <div class="btnrow"><button class="sec sm" id="clearTape">Wyczyść pomiary płyty</button></div>
-    </div>
-    <div id="xyBox" style="display:none;margin-top:12px">
-      <p class="note" style="margin-top:0">Dla niwelatora / tachimetru. Oś X w prawo, oś Y w górę.</p>
-      <div class="grid g2" id="xyGrid"></div>
-      <div class="btnrow"><button class="sec sm" id="fromTape">Przepisz z pomiarów taśmą</button></div>
+    <div class="tw" style="margin-top:12px"><table id="tblNom"></table></div>
+    <p class="hint" id="nomArea"></p>
+    <button class="more" data-more="bldMore">Więcej</button>
+    <div class="morebox" id="bldMore">
+      <label>Wpisany wymiar to</label>
+      <div class="seg" id="baseSeg">
+        <button data-base="out" class="on">Zewnętrzny</button>
+        <button data-base="in">Wewnętrzny</button>
+      </div>
+      <div class="btnrow"><button class="sec sm" id="mirBtn">Wariant lustrzany: NIE</button></div>
+      <label style="margin-top:14px">Tolerancje kontrolne</label>
+      <div class="grid g3">
+        <div class="fld"><label>Bok ± <span class="uu"></span></label><input type="text" inputmode="decimal" id="tolS"></div>
+        <div class="fld"><label>Przekątna ± <span class="uu"></span></label><input type="text" inputmode="decimal" id="tolD"></div>
+        <div class="fld"><label>Kąt ± °</label><input type="text" inputmode="decimal" id="tolA"></div>
+      </div>
+      <p class="note"><b>MD86 = 11620 × 8260 zewn.</b> odczytane z rzutu — <b>zweryfikuj</b>. MD69 i MD100 są puste, do uzupełnienia. Wymiary zapisują się w pamięci przeglądarki.</p>
+      <div class="btnrow">
+        <button class="sec sm" id="saveVar">Zapisz wariant</button>
+        <button class="sec sm" id="copyVar">Kopiuj do „Aktualny projekt”</button>
+      </div>
     </div>
   </div>
 </div>
@@ -577,6 +589,7 @@ function renderHeader(){
   $("#edgeBox").style.display=M.crit==="edge"?"":"none";
   $("#mirBtn").textContent="Wariant lustrzany: "+(M.mirror?"TAK":"NIE");
   $("#mirBtn").classList.toggle("sec",!M.mirror);
+  $$(".lblDim").forEach(function(s){ s.textContent = M.baseDim==="out"?"zewn.":"wewn."; });
   $("#baseEdge").value=String(M.baseEdge);
   if(document.activeElement!==$("#baseOff")) $("#baseOff").value=fin(M.baseOff);
   if(document.activeElement!==$("#minGap")) $("#minGap").value=fin(M.minGap);
@@ -678,8 +691,8 @@ function renderXY(){
 function renderFit(){
   var box=$("#fitStat"), msg=$("#fitMsg");
   box.innerHTML=""; msg.innerHTML="";
-  if(!slab()){ msg.appendChild(el("div",{class:"msg i"},"Wpisz pomiary płyty w sekcji 2.")); return; }
-  if(!dimOK()){ msg.appendChild(el("div",{class:"msg w"},"Uzupełnij wymiary budynku dla wariantu "+VAR_LABEL[M.variant]+" w sekcji 1.")); return; }
+  if(!slab()){ msg.appendChild(el("div",{class:"msg i"},"Wpisz pomiary płyty w sekcji 1.")); return; }
+  if(!dimOK()){ msg.appendChild(el("div",{class:"msg w"},"Uzupełnij wymiary budynku dla wariantu "+VAR_LABEL[M.variant]+" w sekcji 2.")); return; }
   var pl=placement(); if(!pl) return;
   var v=gapValues(pl); if(!v) return;
   var mn=Math.min.apply(null,v), mx=Math.max.apply(null,v);
@@ -711,7 +724,7 @@ function renderFit(){
 /* GŁÓWNY WYNIK */
 function renderMark(){
   var box=$("#markBox"); box.innerHTML="";
-  if(!slab()||!dimOK()){ box.appendChild(el("div",{class:"msg i"},"Potrzebne pomiary płyty (sekcja 2) i wymiary budynku (sekcja 1).")); return; }
+  if(!slab()||!dimOK()){ box.appendChild(el("div",{class:"msg i"},"Potrzebne pomiary płyty (sekcja 1) i wymiary budynku (sekcja 2).")); return; }
   var pl=placement(); if(!pl) return;
   var S=slab();
 
@@ -1004,8 +1017,8 @@ function renderReport(){
 /* checklista */
 var STEPS=[
   ["Oznacz narożniki płyty","Opisz A, B, C, D na wylanej płycie — przeciwnie do ruchu wskazówek zegara, A w lewym dolnym rogu wg rzutu. Wszystkie miary odnoszą się do nich."],
-  ["Zmierz płytę","Cztery boki i obie przekątne, taśmą naciągniętą, w poziomie. Wpisz w sekcji 2 i sprawdź komunikat spójności."],
-  ["Sprawdź wymiary budynku","Wariant, opcja lustrzana, grubość ściany. Sekcja 1."],
+  ["Zmierz płytę","Cztery boki i obie przekątne, taśmą naciągniętą, w poziomie. Wpisz w sekcji 1 i sprawdź komunikat spójności."],
+  ["Sprawdź wymiary budynku","Wariant, grubość ściany, ewentualnie opcja lustrzana. Sekcja 2."],
   ["Wybierz kryterium ustawienia","Maksymalny zapas, równo dookoła albo od konkretnej krawędzi płyty. Sekcja 3."],
   ["Wyznacz ustawienie","Naciśnij „Wyznacz ustawienie” i sprawdź najmniejszy zapas. Ujemny = budynek nie mieści się na płycie — stop, sprawdź pomiary."],
   ["Odmierz i zaznacz 8 punktów","Od każdego narożnika płyty prostopadle do krawędzi, wartości z sekcji 4."],
@@ -1071,6 +1084,14 @@ function recalcSlab(){
 function init(){
   load();
   $$(".card > h2").forEach(function(h){ h.onclick=function(){ h.parentNode.classList.toggle("collapsed"); }; });
+  $$("[data-more]").forEach(function(b){
+    b.onclick=function(){
+      var box=document.getElementById(b.dataset.more);
+      var open=box.classList.toggle("open");
+      b.classList.toggle("open",open);
+      b.firstChild.nodeValue = open ? "Mniej" : "Więcej";
+    };
+  });
   $$("[data-unit]").forEach(function(b){ b.onclick=function(){ M.unit=b.dataset.unit; render(); renderXY(); }; });
   $$("[data-base]").forEach(function(b){ b.onclick=function(){ M.baseDim=b.dataset.base; M.pl.init=false; render(); }; });
   $$("[data-crit]").forEach(function(b){ b.onclick=function(){ M.crit=b.dataset.crit; M.pl.init=false; render(); }; });
