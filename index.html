@@ -172,6 +172,15 @@ button.more.open::after{content:" ▴"}
   <div class="body">
     <label>Wariant</label>
     <div class="chips" id="varChips"></div>
+    <button class="more" data-more="pdfBox">Wczytaj wymiary z PDF</button>
+    <div class="morebox" id="pdfBox">
+      <p class="note" style="margin-top:0">Wskaż PDF z rzutem. Narzędzie odczyta z niego etykiety wymiarowe — <b>nic nie wpisze samo</b>, wybierzesz, która liczba jest którym wymiarem.</p>
+      <input type="file" id="pdfFile" accept="application/pdf,.pdf" style="padding:8px">
+      <div id="pdfMsg"></div>
+      <div id="pdfPages"></div>
+      <div id="pdfView"></div>
+      <div id="pdfPick"></div>
+    </div>
     <div class="grid g2" style="margin-top:12px">
       <div class="fld"><label>Długość <span class="lblDim"></span> <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomL" placeholder="—"></div>
       <div class="fld"><label>Szerokość <span class="lblDim"></span> <span class="uu"></span></label><input type="text" inputmode="decimal" id="nomW" placeholder="—"></div>
@@ -292,6 +301,22 @@ button.more.open::after{content:" ▴"}
     <div id="liveGrid"></div>
     <div id="liveBox"></div>
     <div class="btnrow"><button class="sec sm" id="clearLive">Wyczyść</button></div>
+
+    <button class="more" data-more="p345">Kąt prosty metodą 3-4-5</button>
+    <div class="morebox" id="p345">
+      <p class="note" style="margin-top:0">Masz wytyczony dłuższy bok i chcesz od niego kąt prosty. Odmierz <b>a</b> wzdłuż tego boku, <b>b</b> w bok, a przekątna między końcami musi wyjść <b>c</b>.</p>
+      <div class="grid g2">
+        <div class="fld"><label>a — wzdłuż boku <span class="uu"></span></label><input type="text" inputmode="decimal" id="p345a" value="3000"></div>
+        <div class="fld"><label>b — w bok <span class="uu"></span></label><input type="text" inputmode="decimal" id="p345b" value="4000"></div>
+      </div>
+      <div class="btnrow">
+        <button class="sec sm" data-345="3000,4000">3 / 4 m</button>
+        <button class="sec sm" data-345="6000,8000">6 / 8 m</button>
+        <button class="sec sm" data-345="9000,12000">9 / 12 m</button>
+      </div>
+      <div class="big2" id="p345out" style="margin-top:10px"></div>
+      <div id="p345msg"></div>
+    </div>
   </div>
 </div>
 
@@ -344,6 +369,543 @@ button.more.open::after{content:" ▴"}
 </div>
 
 <script>
+/* ================================================================
+   Czytnik PDF — bez bibliotek, wszystko offline.
+   Obsługuje pliki z klasycznym xref, strumieniami FlateDecode
+   i fontami Type0/Identity-H z mapą ToUnicode (tak eksportuje CAD).
+   Wyciąga: napisy z pozycją i obrotem oraz kreski do podglądu.
+   ================================================================ */
+var PDFPlan=(function(){
+"use strict";
+
+function S(b,i,n){ var s="",k; for(k=0;k<n;k++) s+=String.fromCharCode(b[i+k]); return s; }
+function isWS(c){ return c===32||c===10||c===13||c===9||c===0||c===12; }
+function isDelim(c){ return c===40||c===41||c===60||c===62||c===91||c===93||c===123||c===125||c===47||c===37; }
+
+function Lex(b,p){ this.b=b; this.p=p||0; }
+Lex.prototype.ws=function(){
+  var b=this.b;
+  for(;;){
+    while(this.p<b.length && isWS(b[this.p])) this.p++;
+    if(b[this.p]===37){ while(this.p<b.length && b[this.p]!==10 && b[this.p]!==13) this.p++; }
+    else return;
+  }
+};
+Lex.prototype.token=function(){
+  this.ws();
+  var b=this.b, s=this.p;
+  if(s>=b.length) return null;
+  var c=b[s];
+  if(c===60 && b[s+1]===60){ this.p+=2; return "<<"; }
+  if(c===62 && b[s+1]===62){ this.p+=2; return ">>"; }
+  if(isDelim(c)){ this.p++; return String.fromCharCode(c); }
+  while(this.p<b.length && !isWS(b[this.p]) && !isDelim(b[this.p])) this.p++;
+  return S(b,s,this.p-s);
+};
+Lex.prototype.peek=function(){ var p=this.p, t=this.token(); this.p=p; return t; };
+
+/* --- wartości --- */
+Lex.prototype.obj=function(doc){
+  this.ws();
+  var b=this.b, c=b[this.p];
+  if(c===47){ this.p++; return {name:this.rawName()}; }
+  if(c===40) return this.litStr();
+  if(c===60 && b[this.p+1]!==60) return this.hexStr();
+  if(c===60 && b[this.p+1]===60) return this.dict(doc);
+  if(c===91){ this.p++; var a=[];
+    for(;;){ this.ws(); if(this.b[this.p]===93){ this.p++; break; }
+      if(this.p>=b.length) break; a.push(this.obj(doc)); }
+    return a; }
+  var t=this.token();
+  if(t==="true") return true;
+  if(t==="false") return false;
+  if(t==="null") return null;
+  if(/^[+-]?[\d.]+$/.test(t)){
+    var n=parseFloat(t), save=this.p;
+    if(/^\d+$/.test(t)){
+      var t2=this.token();
+      if(/^\d+$/.test(t2||"")){
+        var t3=this.token();
+        if(t3==="R") return {ref:n, gen:parseInt(t2,10)};
+      }
+      this.p=save;
+    }
+    return n;
+  }
+  return {op:t};
+};
+Lex.prototype.rawName=function(){
+  var b=this.b, s=this.p;
+  while(this.p<b.length && !isWS(b[this.p]) && !isDelim(b[this.p])) this.p++;
+  return S(b,s,this.p-s).replace(/#([0-9A-Fa-f]{2})/g,function(_,h){ return String.fromCharCode(parseInt(h,16)); });
+};
+Lex.prototype.litStr=function(){
+  var b=this.b; this.p++; var d=1, out=[];
+  while(this.p<b.length){
+    var c=b[this.p++];
+    if(c===92){ var n=b[this.p++];
+      var map={110:10,114:13,116:9,98:8,102:12};
+      if(map[n]!==undefined) out.push(map[n]);
+      else if(n>=48&&n<=55){ var o=n-48,k=0;
+        while(k<2 && b[this.p]>=48 && b[this.p]<=55){ o=o*8+(b[this.p++]-48); k++; }
+        out.push(o&255); }
+      else out.push(n);
+    }
+    else if(c===40){ d++; out.push(c); }
+    else if(c===41){ d--; if(!d) break; out.push(c); }
+    else out.push(c);
+  }
+  return {bytes:out};
+};
+Lex.prototype.hexStr=function(){
+  var b=this.b; this.p++; var h="";
+  while(this.p<b.length && b[this.p]!==62){ var c=b[this.p++];
+    if(!isWS(c)) h+=String.fromCharCode(c); }
+  this.p++;
+  if(h.length%2) h+="0";
+  var out=[]; for(var i=0;i<h.length;i+=2) out.push(parseInt(h.substr(i,2),16));
+  return {bytes:out};
+};
+Lex.prototype.dict=function(doc){
+  this.p+=2; var d={};
+  for(;;){
+    this.ws();
+    if(this.b[this.p]===62 && this.b[this.p+1]===62){ this.p+=2; break; }
+    if(this.p>=this.b.length) break;
+    if(this.b[this.p]!==47){ this.token(); continue; }
+    this.p++; var k=this.rawName();
+    d[k]=this.obj(doc);
+  }
+  var save=this.p;
+  if(this.peek()==="stream"){
+    this.token();
+    if(this.b[this.p]===13) this.p++;
+    if(this.b[this.p]===10) this.p++;
+    d.__streamStart=this.p;
+  } else this.p=save;
+  return d;
+};
+
+/* --- dokument --- */
+function Doc(buf){
+  this.b=new Uint8Array(buf);
+  this.xref={};
+  this.trailer=null;
+  this.cache={};
+}
+Doc.prototype.parseXref=function(){
+  var b=this.b, tail=S(b,Math.max(0,b.length-2048),Math.min(2048,b.length));
+  var m=/startxref\s+(\d+)/g, last=null, mm;
+  while((mm=m.exec(tail))) last=mm;
+  if(!last) throw new Error("Nie znaleziono startxref — plik uszkodzony.");
+  var off=parseInt(last[1],10), seen={};
+  while(off && !seen[off]){
+    seen[off]=1;
+    var lx=new Lex(b,off), t=lx.peek();
+    if(t!=="xref"){
+      throw new Error("Ten PDF używa strumienia xref (PDF 1.5+ skompresowany). Ta wersja czytnika obsługuje tylko klasyczny xref.");
+    }
+    lx.token();
+    for(;;){
+      var a=lx.peek();
+      if(a==="trailer" || a===null) break;
+      var start=parseInt(lx.token(),10), cnt=parseInt(lx.token(),10);
+      if(isNaN(start)||isNaN(cnt)) break;
+      for(var i=0;i<cnt;i++){
+        var o=parseInt(lx.token(),10);
+        lx.token();                       /* generacja */
+        var ty=lx.token();                /* n albo f */
+        var num=start+i;
+        if(ty==="n" && !isNaN(o) && this.xref[num]===undefined) this.xref[num]=o;
+      }
+    }
+    if(lx.peek()==="trailer"){
+      lx.token();
+      var tr=lx.obj(this);
+      if(!this.trailer) this.trailer=tr;
+      else for(var k in tr) if(this.trailer[k]===undefined) this.trailer[k]=tr[k];
+      off = (tr && typeof tr.Prev==="number") ? tr.Prev : 0;
+    } else off=0;
+  }
+  if(!this.trailer) throw new Error("Brak trailera w PDF.");
+};
+Doc.prototype.get=function(v){
+  if(v && typeof v==="object" && v.ref!==undefined) return this.fetch(v.ref);
+  return v;
+};
+Doc.prototype.fetch=function(num){
+  if(this.cache[num]!==undefined) return this.cache[num];
+  var off=this.xref[num];
+  if(off===undefined) return null;
+  var lx=new Lex(this.b,off);
+  lx.token(); lx.token();
+  if(lx.token()!=="obj") return null;
+  var o=lx.obj(this);
+  this.cache[num]=o;
+  return o;
+};
+/* zawartość strumienia, rozpakowana */
+Doc.prototype.stream=function(d){
+  var self=this;
+  d=this.get(d);
+  if(!d || d.__streamStart===undefined) return Promise.resolve(new Uint8Array(0));
+  var len=this.get(d.Length);
+  var start=d.__streamStart;
+  var raw;
+  if(typeof len==="number" && len>=0 && start+len<=this.b.length){
+    raw=this.b.subarray(start,start+len);
+    var after=S(this.b,start+len,20);
+    if(!/^\s*endstream/.test(after)) raw=null;
+  }
+  if(!raw){                                   /* Length błędny — szukamy endstream */
+    var idx=-1;
+    for(var i=start;i<this.b.length-9;i++){
+      if(this.b[i]===101&&S(this.b,i,9)==="endstream"){ idx=i; break; }
+    }
+    if(idx<0) return Promise.resolve(new Uint8Array(0));
+    var e=idx; if(this.b[e-1]===10) e--; if(this.b[e-1]===13) e--;
+    raw=this.b.subarray(start,e);
+  }
+  var filt=this.get(d.Filter), names=[];
+  if(filt && filt.name) names=[filt.name];
+  else if(Array.isArray(filt)) names=filt.map(function(x){ var g=self.get(x); return g&&g.name; });
+  if(!names.length) return Promise.resolve(raw);
+  if(names.length!==1 || names[0]!=="FlateDecode")
+    return Promise.reject(new Error("Nieobsługiwana kompresja strumienia: "+names.join(",")+"."));
+  return inflate(raw);
+};
+function inflate(raw){
+  if(typeof DecompressionStream==="undefined")
+    return Promise.reject(new Error("Przeglądarka nie umie rozpakować strumieni (brak DecompressionStream). Użyj nowszego Chrome, Edge lub Firefoksa."));
+  function via(fmt,data){
+    var ds=new DecompressionStream(fmt);
+    var w=ds.writable.getWriter();
+    w.write(data); w.close();
+    return new Response(ds.readable).arrayBuffer().then(function(a){ return new Uint8Array(a); });
+  }
+  return via("deflate",raw).catch(function(){ return via("deflate-raw",raw); });
+}
+
+/* --- strony --- */
+Doc.prototype.pages=function(){
+  var root=this.get(this.trailer.Root);
+  if(!root) throw new Error("Brak katalogu dokumentu.");
+  var pagesRoot=this.get(root.Pages), out=[], self=this, guard=0;
+  function walk(node,inh){
+    if(!node || guard++>5000) return;
+    node=self.get(node);
+    if(!node) return;
+    var ni={};
+    ["Resources","MediaBox","CropBox","Rotate"].forEach(function(k){
+      ni[k] = (node[k]!==undefined) ? node[k] : inh[k];
+    });
+    var ty=self.get(node.Type);
+    var kids=self.get(node.Kids);
+    if(Array.isArray(kids)){
+      kids.forEach(function(k){ walk(k,ni); });
+    } else if(!ty || ty.name==="Page" || node.Contents!==undefined){
+      out.push({dict:node, inh:ni});
+    }
+  }
+  walk(pagesRoot,{});
+  return out;
+};
+
+/* --- ToUnicode --- */
+function parseCMap(txt){
+  var map={}, m, re;
+  re=/beginbfchar([\s\S]*?)endbfchar/g;
+  while((m=re.exec(txt))){
+    var pr=/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g, p;
+    while((p=pr.exec(m[1]))) map[parseInt(p[1],16)]=hexToStr(p[2]);
+  }
+  re=/beginbfrange([\s\S]*?)endbfrange/g;
+  while((m=re.exec(txt))){
+    var body=m[1];
+    var r1=/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g, r;
+    while((r=r1.exec(body))){
+      var lo=parseInt(r[1],16), hi=parseInt(r[2],16), dst=parseInt(r[3],16);
+      if(hi-lo>65535) continue;
+      for(var c=lo;c<=hi;c++) map[c]=String.fromCharCode(dst+(c-lo));
+    }
+    var r2=/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[([\s\S]*?)\]/g;
+    while((r=r2.exec(body))){
+      var lo2=parseInt(r[1],16), items=r[3].match(/<([0-9A-Fa-f]+)>/g)||[];
+      for(var i=0;i<items.length;i++) map[lo2+i]=hexToStr(items[i].replace(/[<>]/g,""));
+    }
+  }
+  return map;
+}
+function hexToStr(h){
+  var s="";
+  for(var i=0;i+3<h.length+1;i+=4){
+    var v=parseInt(h.substr(i,4),16);
+    if(!isNaN(v)) s+=String.fromCharCode(v);
+  }
+  if(h.length===2) s=String.fromCharCode(parseInt(h,16));
+  return s;
+}
+
+/* --- odzyskiwanie tekstu z wbudowanego fontu TrueType ---
+   Gdy PDF nie ma poprawnego /ToUnicode (a CAD-y potrafią wpisać tam nazwę
+   zamiast strumienia), jedyną drogą jest tablica cmap w samym foncie:
+   odwracamy ją, dostając GID -> znak. */
+function ttGidToUnicode(fb){
+  if(!fb || fb.length<12) return null;
+  var dv=new DataView(fb.buffer, fb.byteOffset, fb.byteLength);
+  var numT=dv.getUint16(4), cmapOff=0, i;
+  for(i=0;i<numT;i++){
+    var o=12+i*16;
+    if(o+16>fb.length) break;
+    var tag=String.fromCharCode(fb[o],fb[o+1],fb[o+2],fb[o+3]);
+    if(tag==="cmap"){ cmapOff=dv.getUint32(o+8); break; }
+  }
+  if(!cmapOff || cmapOff+4>fb.length) return null;
+  var n=dv.getUint16(cmapOff+2), best=0, bestScore=-1;
+  for(i=0;i<n;i++){
+    var r=cmapOff+4+i*8;
+    if(r+8>fb.length) break;
+    var pid=dv.getUint16(r), eid=dv.getUint16(r+2), off=dv.getUint32(r+4);
+    var sc = (pid===3&&eid===10)?5 : (pid===3&&eid===1)?4 : (pid===0)?3 : (pid===3&&eid===0)?2 : 1;
+    if(sc>bestScore){ bestScore=sc; best=cmapOff+off; }
+  }
+  if(!best || best+4>fb.length) return null;
+  var fmt=dv.getUint16(best), map={}, c, g;
+  if(fmt===4){
+    var segX2=dv.getUint16(best+6), seg=segX2>>1;
+    var endO=best+14, startO=endO+segX2+2, deltaO=startO+segX2, roO=deltaO+segX2;
+    if(roO+segX2>fb.length) return null;
+    for(i=0;i<seg;i++){
+      var end=dv.getUint16(endO+i*2), start=dv.getUint16(startO+i*2);
+      var delta=dv.getInt16(deltaO+i*2), ro=dv.getUint16(roO+i*2);
+      if(start>end) continue;
+      for(c=start;c<=end;c++){
+        if(c===0xFFFF) break;
+        if(ro===0) g=(c+delta)&0xFFFF;
+        else{
+          var gi=roO+i*2+ro+(c-start)*2;
+          if(gi+1>=fb.length) continue;
+          g=dv.getUint16(gi);
+          if(g) g=(g+delta)&0xFFFF;
+        }
+        /* GID 0 to zwykle .notdef, ale w podzbiorach z CAD-a bywa tam realny
+           glif (np. cyfra 0) — przyjmujemy go, gdy segment jest krótki,
+           czyli font jest podzbiorem, a nie pełnym krojem */
+        if(map[g]===undefined && (g!==0 || (end-start)<256)) map[g]=String.fromCharCode(c);
+      }
+    }
+  } else if(fmt===12){
+    var ng=dv.getUint32(best+12);
+    if(ng>100000) ng=100000;
+    for(i=0;i<ng;i++){
+      var go=best+16+i*12;
+      if(go+12>fb.length) break;
+      var s0=dv.getUint32(go), e0=dv.getUint32(go+4), gs=dv.getUint32(go+8);
+      if(e0-s0>65535) e0=s0+65535;
+      for(c=s0;c<=e0;c++){
+        g=gs+(c-s0);
+        if(map[g]===undefined) map[g]=String.fromCharCode(c);
+      }
+    }
+  } else return null;
+  return map;
+}
+
+/* --- macierze --- */
+function mul(m,n){
+  return [ m[0]*n[0]+m[1]*n[2], m[0]*n[1]+m[1]*n[3],
+           m[2]*n[0]+m[3]*n[2], m[2]*n[1]+m[3]*n[3],
+           m[4]*n[0]+m[5]*n[2]+n[4], m[4]*n[1]+m[5]*n[3]+n[5] ];
+}
+function apply(m,x,y){ return {x:m[0]*x+m[2]*y+m[4], y:m[1]*x+m[3]*y+m[5]}; }
+
+/* --- treść strony --- */
+function parseContent(bytes, fonts){
+  var lx=new Lex(bytes,0), st=[], gs=[], ctm=[1,0,0,1,0,0];
+  var tm=null, tlm=null, font=null, leading=0, tfs=1;
+  var texts=[], paths=[], cur=null, sub=null, col=[0,0,0];
+  function num(i){ var v=st[st.length-i]; return (typeof v==="number")?v:0; }
+  function flushPath(){ if(sub&&sub.length>1) cur.push(sub); sub=null; }
+  function endPath(stroke){
+    flushPath();
+    if(cur&&cur.length) paths.push({pts:cur, col:col.slice(), stroke:stroke});
+    cur=null;
+  }
+  function show(bts){
+    if(!tm) return;
+    var m=mul(tm,ctm), p=apply(m,0,0);
+    var s="", i;
+    if(font && font.two){
+      for(i=0;i+1<bts.length;i+=2){
+        var c=(bts[i]<<8)|bts[i+1];
+        var ch = (font.map && font.map[c]!==undefined) ? font.map[c] : undefined;
+        if(ch===undefined && font.gid2uni){
+          var g=(font.cid2gid && font.cid2gid[c]!==undefined) ? font.cid2gid[c] : c;
+          ch=font.gid2uni[g];
+        }
+        s += (ch===undefined) ? "" : ch;
+      }
+    } else {
+      for(i=0;i<bts.length;i++){
+        var c1=bts[i];
+        s += (font && font.map && font.map[c1]!==undefined) ? font.map[c1] : String.fromCharCode(c1);
+      }
+    }
+    if(s) texts.push({s:s, x:p.x, y:p.y, a:Math.atan2(m[1],m[0]),
+                      sz:Math.sqrt(m[0]*m[0]+m[1]*m[1])*tfs});
+  }
+  var guard=0;
+  for(;;){
+    if(guard++>4000000) break;
+    lx.ws();
+    if(lx.p>=bytes.length) break;
+    var c=bytes[lx.p];
+    if(c===47||c===40||c===60||c===91||(c>=48&&c<=57)||c===43||c===45||c===46){
+      st.push(lx.obj(null));
+      if(st.length>64) st.shift();
+      continue;
+    }
+    var op=lx.token();
+    if(op===null) break;
+    switch(op){
+      case "q": gs.push(ctm.slice()); break;
+      case "Q": if(gs.length) ctm=gs.pop(); break;
+      case "cm": ctm=mul([num(6),num(5),num(4),num(3),num(2),num(1)],ctm); break;
+      case "BT": tm=[1,0,0,1,0,0]; tlm=tm.slice(); break;
+      case "ET": tm=null; break;
+      case "Tf": var fn=st[st.length-2]; font=(fn&&fn.name&&fonts)?fonts[fn.name]:null; tfs=num(1)||1; break;
+      case "TL": leading=num(1); break;
+      case "Td": tlm=mul([1,0,0,1,num(2),num(1)],tlm||[1,0,0,1,0,0]); tm=tlm.slice(); break;
+      case "TD": leading=-num(1); tlm=mul([1,0,0,1,num(2),num(1)],tlm||[1,0,0,1,0,0]); tm=tlm.slice(); break;
+      case "Tm": tlm=[num(6),num(5),num(4),num(3),num(2),num(1)]; tm=tlm.slice(); break;
+      case "T*": tlm=mul([1,0,0,1,0,-leading],tlm||[1,0,0,1,0,0]); tm=tlm.slice(); break;
+      case "Tj": case "'": case "\"":
+        var a=st[st.length-1];
+        if(op!=="Tj"){ tlm=mul([1,0,0,1,0,-leading],tlm||[1,0,0,1,0,0]); tm=tlm.slice(); }
+        if(a&&a.bytes) show(a.bytes);
+        break;
+      case "TJ":
+        var arr=st[st.length-1];
+        if(Array.isArray(arr)) arr.forEach(function(e){ if(e&&e.bytes) show(e.bytes); });
+        break;
+      case "m": flushPath(); if(!cur) cur=[]; sub=[apply(ctm,num(2),num(1))]; break;
+      case "l": if(sub) sub.push(apply(ctm,num(2),num(1))); break;
+      case "c": if(sub) sub.push(apply(ctm,num(2),num(1))); break;
+      case "v": case "y": if(sub) sub.push(apply(ctm,num(2),num(1))); break;
+      case "h": if(sub&&sub.length) sub.push({x:sub[0].x,y:sub[0].y}); break;
+      case "re":
+        flushPath(); if(!cur) cur=[];
+        var x=num(4), y=num(3), w=num(2), h2=num(1);
+        cur.push([apply(ctm,x,y),apply(ctm,x+w,y),apply(ctm,x+w,y+h2),apply(ctm,x,y+h2),apply(ctm,x,y)]);
+        break;
+      case "S": case "s": endPath(true); break;
+      case "f": case "F": case "f*": case "B": case "B*": case "b": case "b*": endPath(false); break;
+      case "n": endPath(false); break;
+      case "RG": col=[num(3),num(2),num(1)]; break;
+      case "G": col=[num(1),num(1),num(1)]; break;
+      case "K": col=[(1-num(4))*(1-num(1)),(1-num(3))*(1-num(1)),(1-num(2))*(1-num(1))]; break;
+    }
+    st.length=0;
+  }
+  return {texts:texts, paths:paths};
+}
+
+/* Każdy znak bywa osobnym Tj z własną macierzą — sklejamy je w napisy:
+   grupujemy po kącie i linii bazowej, sortujemy wzdłuż kierunku pisma
+   i łączymy sąsiadów stojących bliżej niż szerokość znaku. */
+function mergeTexts(items){
+  var groups={}, out=[];
+  items.forEach(function(t){
+    var deg=Math.round(t.a*57.2958);
+    var ca=Math.cos(t.a), sa=Math.sin(t.a);
+    var along=t.x*ca+t.y*sa, perp=-t.x*sa+t.y*ca;
+    var key=deg+"|"+Math.round(perp/1.5);
+    (groups[key]=groups[key]||[]).push({t:t, along:along});
+  });
+  Object.keys(groups).forEach(function(k){
+    var g=groups[k];
+    g.sort(function(a,b){ return a.along-b.along; });
+    var cur=null;
+    g.forEach(function(e){
+      var sz=e.t.sz>0?e.t.sz:6;
+      if(cur && (e.along-cur.end) < sz*0.9){
+        cur.s+=e.t.s; cur.end=e.along+sz*0.62;
+      } else {
+        if(cur) out.push({s:cur.s, x:cur.x, y:cur.y, a:cur.a});
+        cur={s:e.t.s, x:e.t.x, y:e.t.y, a:e.t.a, end:e.along+sz*0.62};
+      }
+    });
+    if(cur) out.push({s:cur.s, x:cur.x, y:cur.y, a:cur.a});
+  });
+  return out;
+}
+
+/* --- API --- */
+function load(buf){
+  var doc=new Doc(buf);
+  doc.parseXref();
+  return doc;
+}
+function page(doc, idx){
+  var pgs=doc.pages();
+  if(idx<0||idx>=pgs.length) return Promise.reject(new Error("Nie ma takiej strony."));
+  var pg=pgs[idx];
+  var res=doc.get(pg.dict.Resources) || doc.get(pg.inh.Resources) || {};
+  var fonts={}, jobs=[];
+  var fdict=doc.get(res.Font)||{};
+  Object.keys(fdict).forEach(function(fn){
+    var f=doc.get(fdict[fn]); if(!f) return;
+    var sub=doc.get(f.Subtype), enc=doc.get(f.Encoding);
+    var two = (sub&&sub.name==="Type0");
+    if(enc&&enc.name&&/Identity/.test(enc.name)) two=true;
+    var rec={two:two, map:null, gid2uni:null, cid2gid:null};
+    fonts[fn]=rec;
+    /* 1. poprawny ToUnicode (musi być strumieniem, nie nazwą) */
+    if(f.ToUnicode!==undefined && f.ToUnicode && f.ToUnicode.ref!==undefined){
+      jobs.push(doc.stream(f.ToUnicode).then(function(b){
+        if(b && b.length) rec.map=parseCMap(S(b,0,b.length));
+      }).catch(function(){}));
+    }
+    /* 2. zapas: odwrócona tablica cmap z wbudowanego fontu */
+    var dfs=doc.get(f.DescendantFonts);
+    var d0=Array.isArray(dfs)?doc.get(dfs[0]):doc.get(dfs);
+    if(d0){
+      var fdsc=doc.get(d0.FontDescriptor);
+      if(fdsc && fdsc.FontFile2!==undefined){
+        jobs.push(doc.stream(fdsc.FontFile2).then(function(b){
+          rec.gid2uni=ttGidToUnicode(b);
+        }).catch(function(){}));
+      }
+      var c2g=d0.CIDToGIDMap;
+      if(c2g && c2g.ref!==undefined){
+        jobs.push(doc.stream(c2g).then(function(b){
+          if(!b||!b.length) return;
+          var m={};
+          for(var i2=0;i2+1<b.length;i2+=2) m[i2>>1]=(b[i2]<<8)|b[i2+1];
+          rec.cid2gid=m;
+        }).catch(function(){}));
+      }
+    }
+  });
+  var cont=doc.get(pg.dict.Contents), parts=[];
+  if(Array.isArray(cont)) parts=cont;
+  else if(cont) parts=[pg.dict.Contents];
+  jobs.push(Promise.all(parts.map(function(p){ return doc.stream(p); })).then(function(bufs){
+    var tot=0; bufs.forEach(function(b){ tot+=b.length+1; });
+    var all=new Uint8Array(tot), o=0;
+    bufs.forEach(function(b){ all.set(b,o); o+=b.length; all[o++]=10; });
+    pg.__content=all;
+  }));
+  return Promise.all(jobs).then(function(){
+    var mb=doc.get(pg.inh.MediaBox)||doc.get(pg.dict.MediaBox)||[0,0,612,792];
+    mb=mb.map(function(v){ return doc.get(v); });
+    var r=parseContent(pg.__content, fonts);
+    return {texts:mergeTexts(r.texts), paths:r.paths, box:mb, fonts:fonts, raw:r.texts};
+  });
+}
+return {load:load, page:page, pageCount:function(doc){ return doc.pages().length; }};
+})();
+
 "use strict";
 /* ============================ STAN ============================ */
 var LS="mdom_trasowanie_v3";
@@ -358,6 +920,13 @@ function sideName(j){
   return ["wejście","prawa","tył","lewa"][d];
 }
 function edgeLabel(j){ return EDGE[j]+" ("+sideName(j)+")"; }
+/* narożnik i to styk ściany (i-1) i ściany i */
+function cornerName(i){ return sideName((i+3)%4)+" / "+sideName(i); }
+/* odległość od krawędzi płyty — ujemna znaczy, że punkt leży poza płytą */
+function dstTxt(v){
+  if(v===null||v===undefined||!isFinite(v)) return "—";
+  return (v<-0.05) ? (f(Math.abs(v))+" "+u()+" NA ZEWNĄTRZ") : (f(v)+" "+u());
+}
 var CONTS=["out","in"];
 var CNAME={out:"zewnętrzny",in:"wewnętrzny"};
 var CCOL={out:"#1b4a7a",in:"#2f8f5b"};
@@ -1032,6 +1601,57 @@ function renderLiveGrid(){
     })(i);
   }
 }
+/* rysunek: gdzie punkt jest, a gdzie ma być — kierunki zgodne z rzeczywistością,
+   sama odchyłka narysowana z przesadą, żeby była widoczna */
+function moveSvg(x){
+  var ns="http://www.w3.org/2000/svg";
+  var W=340,H=210, svg=document.createElementNS(ns,"svg");
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  svg.style.background="#fff"; svg.style.borderRadius="8px";
+  svg.style.border="1px solid var(--line)"; svg.style.marginTop="6px";
+  function add(t,a,txt){
+    var e=document.createElementNS(ns,t);
+    for(var k in a) e.setAttribute(k,a[k]);
+    if(txt!==undefined) e.textContent=txt;
+    svg.appendChild(e); return e;
+  }
+  var EX=52, EY=H-46;                                    /* krawędzie płyty */
+  add("rect",{x:EX-9,y:0,width:9,height:EY+9,fill:"#8a6d3b"});
+  add("rect",{x:EX-9,y:EY,width:W-EX+9,height:9,fill:"#8a6d3b"});
+  add("text",{x:EX-14,y:26,"text-anchor":"end","font-size":13,"font-weight":700,
+    fill:"#8a6d3b",transform:"rotate(-90 "+(EX-14)+" 26)"}, sideName((x.i+3)%4));
+  add("text",{x:W-8,y:EY+24,"text-anchor":"end","font-size":13,"font-weight":700,
+    fill:"#8a6d3b"}, sideName(x.i));
+
+  var cx=192, cy=96;                                     /* punkt docelowy */
+  var dx=x.masz[1]-x.cel[1], dy=x.masz[0]-x.cel[0];
+  var mx=Math.max(Math.abs(dx),Math.abs(dy),0.1);
+  var s=Math.min(58/mx, 58);                             /* przesada, ale kierunek prawdziwy */
+  var px=cx+dx*s, py=cy-dy*s;                            /* punkt obecny */
+
+  add("line",{x1:EX,y1:cy,x2:cx,y2:cy,stroke:"#c9d2dc","stroke-width":1,"stroke-dasharray":"4 4"});
+  add("line",{x1:cx,y1:EY,x2:cx,y2:cy,stroke:"#c9d2dc","stroke-width":1,"stroke-dasharray":"4 4"});
+
+  var d=add("defs"); var mk=document.createElementNS(ns,"marker");
+  mk.setAttribute("id","ah"); mk.setAttribute("markerWidth","7"); mk.setAttribute("markerHeight","7");
+  mk.setAttribute("refX","6"); mk.setAttribute("refY","3.5"); mk.setAttribute("orient","auto");
+  var pth=document.createElementNS(ns,"path");
+  pth.setAttribute("d","M0,0 L7,3.5 L0,7 z"); pth.setAttribute("fill","#c0261f");
+  mk.appendChild(pth); d.appendChild(mk);
+
+  if(Math.hypot(px-cx,py-cy)>3)
+    add("line",{x1:px,y1:py,x2:cx,y2:cy,stroke:"#c0261f","stroke-width":3.5,"marker-end":"url(#ah)"});
+
+  add("circle",{cx:cx,cy:cy,r:9,fill:"none",stroke:"#1a7f3c","stroke-width":3.5});
+  add("text",{x:cx+15,y:cy-10,"font-size":13,"font-weight":800,fill:"#1a7f3c"},"tu ma być");
+  add("circle",{cx:px,cy:py,r:6,fill:"#c0261f"});
+  add("text",{x:px+11,y:py+18,"font-size":13,"font-weight":800,fill:"#c0261f"},"tu jest teraz");
+
+  add("text",{x:(EX+cx)/2,y:cy-8,"text-anchor":"middle","font-size":12,fill:"#4a5560"}, dstTxt(x.cel[1]));
+  add("text",{x:cx+6,y:(cy+EY)/2,"font-size":12,fill:"#4a5560"}, dstTxt(x.cel[0]));
+  return svg;
+}
+
 function renderLiveBox(){
   var box=$("#liveBox"); box.innerHTML="";
   var T=cornerTargets(); if(!T) return;
@@ -1044,7 +1664,8 @@ function renderLiveBox(){
     var P=placeNom("out",placement())[i];
     var r=d2(P,Q);
     maxr=Math.max(maxr,r);
-    got.push({i:i,k:LETTERS[i],Q:Q,kor1:kor1,kor2:kor2,r:r});
+    got.push({i:i,k:LETTERS[i],Q:Q,kor1:kor1,kor2:kor2,r:r,
+              masz:[m[0],m[1]], cel:[T[i][0],T[i][1]]});
   }
   if(!got.length){
     box.appendChild(el("div",{class:"msg i"},"Wpisz obie odległości przy dowolnym narożniku, a policzę poprawkę."));
@@ -1055,16 +1676,30 @@ function renderLiveBox(){
                   : "Największe odchylenie: "+fu(maxr)+". Poprawki poniżej."));
   got.forEach(function(x){
     var d=el("div",{class:"step"+(x.r<=M.tol.s?"":" bad")});
-    d.appendChild(el("h4",null,"Narożnik "+x.k+" — odchylony o "+fu(x.r)));
-    if(x.r<=M.tol.s){ d.appendChild(el("div",{class:"m"},"✔ w tolerancji, zostaw")); }
-    else{
-      [[x.kor1, x.i],[x.kor2,(x.i+3)%4]].forEach(function(p){
-        if(Math.abs(p[0])<0.5) return;
-        var e2=el("div",{class:"m"});
-        e2.innerHTML = (p[0]>0 ? "odsuń od krawędzi " : "dosuń do krawędzi ")+edgeLabel(p[1])+
-                       " o <b>"+f(Math.abs(p[0]))+" "+u()+"</b>";
+    d.appendChild(el("h4",null,"Narożnik "+x.k+" — róg "+cornerName(x.i)));
+    if(x.r<=M.tol.s){
+      d.appendChild(el("div",{class:"m"},"✔ dobrze, zostaw jak jest"));
+    } else {
+      d.appendChild(el("div",{class:"m"},"Trzeba go ruszyć o "+fu(x.r)+":"));
+      [[0,x.i],[1,(x.i+3)%4]].forEach(function(p){
+        var slot=p[0], ej=p[1], kor=(slot===0)?x.kor1:x.kor2;
+        var e2=el("div",{style:"margin:8px 0;padding:8px 10px;background:#fff;border-radius:8px;border:1px solid var(--line)"});
+        var naz="ściany "+sideName(ej);
+        if(Math.abs(kor)<0.5){
+          e2.innerHTML="<b>Od krawędzi płyty od strony "+sideName(ej)+"</b>: "+
+            dstTxt(x.masz[slot])+" — <span style='color:var(--ok)'>dobrze, nie ruszaj</span>";
+        } else {
+          var blizej = kor<0;
+          e2.innerHTML="<b>Od krawędzi płyty od strony "+sideName(ej)+"</b><br>"+
+            "masz <b>"+dstTxt(x.masz[slot])+"</b>, ma być <b>"+dstTxt(x.cel[slot])+"</b><br>"+
+            "<span style='font-size:19px;color:#c0261f'>"+(blizej?"⟵":"⟶")+" przesuń o "+
+            f(Math.abs(kor))+" "+u()+" "+(blizej?"BLIŻEJ tej krawędzi":"DALEJ od tej krawędzi")+"</span>";
+        }
         d.appendChild(e2);
       });
+      d.appendChild(moveSvg(x));
+      d.appendChild(el("p",{class:"hint"},
+        "Mierz zawsze pod kątem prostym do krawędzi płyty, od jej brzegu do zaznaczonego punktu."));
     }
     box.appendChild(d);
   });
@@ -1231,6 +1866,167 @@ function renderReport(){
   $("#report").value=L.join("\n");
 }
 
+/* ---- kąt prosty metodą 3-4-5 ---- */
+function render345(){
+  var out=$("#p345out"), msg=$("#p345msg");
+  if(!out) return;
+  out.innerHTML=""; msg.innerHTML="";
+  var a=toMM($("#p345a").value), b=toMM($("#p345b").value);
+  if(!(a>0&&b>0)){ msg.appendChild(el("div",{class:"msg i"},"Podaj a i b.")); return; }
+  var c=Math.sqrt(a*a+b*b);
+  var s1=el("div",{class:"stat good"});
+  s1.appendChild(el("div",{class:"k"},"Przekątna c musi wyjść"));
+  s1.appendChild(el("div",{class:"v"},fu(c)));
+  out.appendChild(s1);
+  /* ile kosztuje błąd 1 mm na przekątnej, przeniesiony na koniec dłuższego boku */
+  var dAng=Math.abs(Math.acos((a*a+b*b-(c+1)*(c+1))/(-2*a*b)) - Math.PI/2);
+  var dOK=dimOK()?dimOf("out"):null;
+  var dl=dOK?Math.max(dOK.L,dOK.W):11000;
+  var s2=el("div",{class:"stat "+(dAng*dl<=M.tol.s?"good":"warn")});
+  s2.appendChild(el("div",{class:"k"},"Pomyłka 1 mm na c daje"));
+  s2.appendChild(el("div",{class:"v"},fu(dAng*dl)));
+  out.appendChild(s2);
+  msg.appendChild(el("div",{class:"msg "+(dAng*dl<=M.tol.s?"g":"w")},
+    "Jeśli przy odmierzaniu c pomylisz się o 1 "+u()+", to na końcu ściany długiej na "+fu(dl)+
+    " narożnik ucieknie o "+fu(dAng*dl)+"."+
+    (dAng*dl>M.tol.s ? " To więcej niż Twoja tolerancja "+fu(M.tol.s)+" — weź większy trójkąt." :
+                       " Mieści się w tolerancji.")));
+  msg.appendChild(el("p",{class:"hint"},
+    "Im większy trójkąt, tym dokładniejszy kąt. Po ustawieniu kąta i tak sprawdź obie przekątne całego prostokąta."));
+}
+
+/* ---- wczytywanie wymiarów z PDF ---- */
+var PDF={doc:null, page:null, labels:[], idx:0};
+function pdfSay(cls,txt){
+  var b=$("#pdfMsg"); b.innerHTML="";
+  b.appendChild(el("div",{class:"msg "+cls},txt));
+}
+function pdfOpen(file){
+  if(!file) return;
+  pdfSay("i","Czytam "+file.name+"…");
+  $("#pdfPages").innerHTML=""; $("#pdfView").innerHTML=""; $("#pdfPick").innerHTML="";
+  file.arrayBuffer().then(function(buf){
+    PDF.doc=PDFPlan.load(buf);
+    var n=PDFPlan.pageCount(PDF.doc);
+    pdfSay("g","Wczytano: "+n+" "+(n===1?"strona":"stron")+". Wybierz stronę z rzutem.");
+    var box=$("#pdfPages"); box.innerHTML="";
+    box.appendChild(el("label",null,"Strona"));
+    var seg=el("div",{class:"chips"});
+    for(var i=0;i<n;i++)(function(i){
+      var b2=el("button",{class:"chip"+(i===0?"":"")},String(i+1));
+      b2.onclick=function(){
+        $$("#pdfPages .chip").forEach(function(c){ c.classList.remove("on"); });
+        b2.classList.add("on"); pdfPage(i);
+      };
+      seg.appendChild(b2);
+    })(i);
+    box.appendChild(seg);
+  }).catch(function(e){ pdfSay("e","Nie udało się otworzyć pliku: "+e.message); });
+}
+function pdfPage(i){
+  pdfSay("i","Analizuję stronę "+(i+1)+"…");
+  PDFPlan.page(PDF.doc,i).then(function(pg){
+    PDF.page=pg; PDF.idx=i;
+    /* scal napisy stojące w tym samym miejscu i pod tym samym kątem */
+    var by={}, order=[];
+    pg.texts.forEach(function(t){
+      var k=Math.round(t.x)+"|"+Math.round(t.y)+"|"+Math.round(t.a*57.2958);
+      if(!by[k]){ by[k]={s:"",x:t.x,y:t.y,a:t.a}; order.push(k); }
+      by[k].s+=t.s;
+    });
+    var labs=[];
+    order.forEach(function(k){
+      var it=by[k], m=String(it.s).match(/\d[\d\s]*/g);
+      if(!m) return;
+      m.forEach(function(raw){
+        var v=parseInt(raw.replace(/\s/g,""),10);
+        if(isNaN(v)||v<50||v>100000) return;
+        labs.push({v:v, x:it.x, y:it.y, a:it.a, txt:it.s.trim()});
+      });
+    });
+    PDF.labels=labs;
+    if(!labs.length){ pdfSay("w","Na tej stronie nie znalazłem żadnych liczb. Spróbuj innej strony."); $("#pdfView").innerHTML=""; $("#pdfPick").innerHTML=""; return; }
+    pdfSay("g","Strona "+(i+1)+": znalazłem "+labs.length+" liczb. Wybierz, która jest którym wymiarem.");
+    pdfDraw(); pdfList();
+  }).catch(function(e){ pdfSay("e","Nie udało się przeczytać strony: "+e.message); });
+}
+function pdfDraw(){
+  var wrap=$("#pdfView"); wrap.innerHTML="";
+  var pg=PDF.page; if(!pg) return;
+  var bx=pg.box, x0=Math.min(bx[0],bx[2]), y0=Math.min(bx[1],bx[3]);
+  var W=Math.abs(bx[2]-bx[0]), H=Math.abs(bx[3]-bx[1]);
+  if(!(W>0&&H>0)) return;
+  var ns="http://www.w3.org/2000/svg";
+  var svg=document.createElementNS(ns,"svg");
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  svg.setAttribute("id","pdfsvg");
+  svg.style.border="1px solid var(--line)";
+  function Y(y){ return H-(y-y0); }
+  pg.paths.forEach(function(p){
+    var c=p.col, red=(c[0]>0.5&&c[1]<0.4&&c[2]<0.4);
+    p.pts.forEach(function(sp){
+      var d="M"+sp.map(function(q){ return (q.x-x0).toFixed(1)+","+Y(q.y).toFixed(1); }).join("L");
+      var e=document.createElementNS(ns,"path");
+      e.setAttribute("d",d); e.setAttribute("fill","none");
+      e.setAttribute("stroke", red?"#c0261f":"#9aa5b1");
+      e.setAttribute("stroke-width", red?1.6:0.7);
+      svg.appendChild(e);
+    });
+  });
+  PDF.labels.forEach(function(l,i){
+    var cx=l.x-x0, cy=Y(l.y);
+    var c=document.createElementNS(ns,"circle");
+    c.setAttribute("cx",cx); c.setAttribute("cy",cy); c.setAttribute("r",7);
+    c.setAttribute("fill","#1b4a7a"); c.setAttribute("opacity",".55");
+    c.setAttribute("data-lab",String(i)); c.style.cursor="pointer";
+    svg.appendChild(c);
+  });
+  svg.addEventListener("click",function(e){
+    var id=e.target.getAttribute&&e.target.getAttribute("data-lab");
+    if(id===null||id===undefined) return;
+    var el2=document.getElementById("labrow"+id);
+    if(el2){ el2.scrollIntoView({block:"center"}); el2.style.background="#fff3df"; }
+  });
+  wrap.appendChild(svg);
+  wrap.appendChild(el("p",{class:"hint"},"Czerwone linie to ściany, kropki to znalezione liczby. Dotknięcie kropki podświetla ją na liście."));
+}
+function pdfList(){
+  var box=$("#pdfPick"); box.innerHTML="";
+  var uniq={}, list=[];
+  PDF.labels.forEach(function(l,i){
+    if(uniq[l.v]!==undefined) return;
+    uniq[l.v]=1; list.push({v:l.v, i:i});
+  });
+  list.sort(function(a,b){ return b.v-a.v; });
+  box.appendChild(el("div",{class:"sub2"},"Znalezione liczby [mm]"));
+  var tw=el("div",{class:"tw"}), t=el("table");
+  var h=el("thead"), hr=el("tr");
+  ["Liczba","Ustaw jako"].forEach(function(x){ hr.appendChild(el("th",null,x)); });
+  h.appendChild(hr); t.appendChild(h);
+  var tb=el("tbody");
+  list.slice(0,40).forEach(function(it){
+    var tr=el("tr",{id:"labrow"+it.i});
+    tr.appendChild(el("td",null,String(it.v)));
+    var td=el("td"), row=el("div",{style:"display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap"});
+    [["Długość","L"],["Szerokość","W"],["Ściana","T"]].forEach(function(p){
+      var b=el("button",{class:"sec sm"},p[0]);
+      b.onclick=function(){
+        if(p[1]==="L") M.variants[M.variant].L=it.v;
+        if(p[1]==="W") M.variants[M.variant].W=it.v;
+        if(p[1]==="T") M.wall=it.v;
+        M.pl.init=false;
+        render();
+        pdfSay("g","Ustawiono "+p[0].toLowerCase()+" = "+it.v+" mm. Sprawdź tabelę wymiarów poniżej.");
+      };
+      row.appendChild(b);
+    });
+    td.appendChild(row); tr.appendChild(td); tb.appendChild(tr);
+  });
+  t.appendChild(tb); tw.appendChild(t); box.appendChild(tw);
+  if(list.length>40) box.appendChild(el("p",{class:"hint"},"Pokazuję 40 największych z "+list.length+"."));
+  box.appendChild(el("p",{class:"hint"},"Wartości trafiają do wariantu "+VAR_LABEL[M.variant]+" i są w milimetrach, niezależnie od wybranej jednostki."));
+}
+
 /* checklista */
 var STEPS=[
   ["Oznacz narożniki płyty","Opisz A, B, C, D na wylanej płycie — przeciwnie do ruchu wskazówek zegara, A w lewym dolnym rogu wg rzutu. Wszystkie miary odnoszą się do nich."],
@@ -1325,6 +2121,16 @@ function init(){
   $("#baseOff").addEventListener("input",function(){ var v=toMM(this.value); M.baseOff=(v===null?0:v); M.pl.init=false; renderLive(); });
   $("#baseEdge").addEventListener("change",function(){ M.baseEdge=+this.value; M.pl.init=false; renderLive(); });
   $("#entry").addEventListener("change",function(){ M.entry=+this.value; render(); });
+  $("#pdfFile").addEventListener("change",function(){ pdfOpen(this.files&&this.files[0]); });
+  $("#p345a").addEventListener("input",render345);
+  $("#p345b").addEventListener("input",render345);
+  $$("[data-345]").forEach(function(b){
+    b.onclick=function(){
+      var p=b.dataset["345"].split(",");
+      $("#p345a").value=f(parseFloat(p[0])); $("#p345b").value=f(parseFloat(p[1]));
+      render345();
+    };
+  });
   $("#clearLive").onclick=function(){
     M.live={A:[null,null],B:[null,null],C:[null,null],D:[null,null]};
     renderLiveGrid(); renderLiveBox(); renderReport(); save();
@@ -1378,7 +2184,7 @@ function init(){
   $("#printRep").onclick=function(){ window.print(); };
 
   if(!M.work) recalcSlab();
-  renderChecklist(); renderSets(); render(); renderXY();
+  renderChecklist(); renderSets(); render(); renderXY(); render345();
 }
 init();
 </script>
