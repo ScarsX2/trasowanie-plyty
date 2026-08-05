@@ -1601,6 +1601,85 @@ function renderLiveGrid(){
     })(i);
   }
 }
+/* Przeglądowy rysunek dla całej ekipy: obrys odniesienia i przy każdym narożniku
+   strzałka w prawdziwym kierunku przesunięcia plus wielka liczba ile.
+   Długość strzałki jest umowna (inaczej milimetry byłyby niewidoczne na 11 m). */
+function arrowsSvg(poly, items, podpis){
+  var ns="http://www.w3.org/2000/svg";
+  var W=760, H=560, PAD=104;
+  var svg=document.createElementNS(ns,"svg");
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  svg.style.background="#fff"; svg.style.borderRadius="10px";
+  svg.style.border="1px solid var(--line)"; svg.style.marginBottom="10px";
+  function add(t,a,txt){
+    var e=document.createElementNS(ns,t);
+    for(var k in a) e.setAttribute(k,a[k]);
+    if(txt!==undefined) e.textContent=txt;
+    svg.appendChild(e); return e;
+  }
+  var dp=poly.map(function(p){ return {x:M.mirror?-p.x:p.x, y:p.y}; });
+  var minX=1e18,maxX=-1e18,minY=1e18,maxY=-1e18;
+  dp.forEach(function(p){ minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y); });
+  var bw=Math.max(maxX-minX,1), bh=Math.max(maxY-minY,1);
+  var s=Math.min((W-2*PAD)/bw,(H-2*PAD)/bh), ox=(W-bw*s)/2, oy=(H-bh*s)/2;
+  function sc(p){ var q={x:M.mirror?-p.x:p.x, y:p.y};
+    return {x:(q.x-minX)*s+ox, y:H-((q.y-minY)*s+oy)}; }
+
+  var d=add("defs"), mk=document.createElementNS(ns,"marker");
+  mk.setAttribute("id","ov"); mk.setAttribute("markerWidth","6"); mk.setAttribute("markerHeight","6");
+  mk.setAttribute("refX","5.5"); mk.setAttribute("refY","3"); mk.setAttribute("orient","auto");
+  var ap=document.createElementNS(ns,"path");
+  ap.setAttribute("d","M0,0 L6,3 L0,6 z"); ap.setAttribute("fill","#c0261f");
+  mk.appendChild(ap); d.appendChild(mk);
+
+  add("polygon",{points:poly.map(function(p){ var q=sc(p); return q.x.toFixed(1)+","+q.y.toFixed(1); }).join(" "),
+    fill:"#f6f1e6", stroke:"#8a6d3b", "stroke-width":4, "stroke-linejoin":"round"});
+
+  var cx=0,cy=0; poly.forEach(function(p){ var q=sc(p); cx+=q.x; cy+=q.y; }); cx/=4; cy/=4;
+  var maxr=0; items.forEach(function(it){ maxr=Math.max(maxr,it.r); });
+
+  for(var i=0;i<4;i++){
+    var q=sc(poly[i]);
+    var vx=q.x-cx, vy=q.y-cy, vl=Math.sqrt(vx*vx+vy*vy)||1;
+    var it=null;
+    items.forEach(function(z){ if(z.i===i) it=z; });
+    add("text",{x:q.x+vx/vl*30,y:q.y+vy/vl*30,"text-anchor":"middle","dominant-baseline":"middle",
+      "font-size":26,"font-weight":900,fill:"#8a6d3b"},LETTERS[i]);
+    if(!it){
+      add("circle",{cx:q.x,cy:q.y,r:8,fill:"#c9d2dc"});
+      add("text",{x:q.x+vx/vl*64,y:q.y+vy/vl*64,"text-anchor":"middle","dominant-baseline":"middle",
+        "font-size":15,"font-weight":700,fill:"#9aa5b1"},"brak pomiaru");
+      continue;
+    }
+    if(it.r<=M.tol.s){
+      add("circle",{cx:q.x,cy:q.y,r:13,fill:"#e6f5ea",stroke:"#1a7f3c","stroke-width":3.5});
+      add("text",{x:q.x,y:q.y+1,"text-anchor":"middle","dominant-baseline":"middle",
+        "font-size":17,"font-weight":900,fill:"#1a7f3c"},"✓");
+      add("text",{x:q.x+vx/vl*66,y:q.y+vy/vl*66,"text-anchor":"middle","dominant-baseline":"middle",
+        "font-size":17,"font-weight":800,fill:"#1a7f3c"},"dobrze");
+      continue;
+    }
+    /* prawdziwy kierunek, umowna długość */
+    var dx=it.to.x-it.from.x, dy=it.to.y-it.from.y;
+    if(M.mirror) dx=-dx;
+    var dl=Math.sqrt(dx*dx+dy*dy)||1;
+    var L=42+58*(maxr>0?it.r/maxr:1);
+    var ex=q.x+(dx/dl)*L, ey=q.y-(dy/dl)*L;
+    add("line",{x1:q.x,y1:q.y,x2:ex,y2:ey,stroke:"#c0261f","stroke-width":6,
+      "marker-end":"url(#ov)","stroke-linecap":"round"});
+    add("circle",{cx:q.x,cy:q.y,r:8,fill:"#c0261f"});
+    var tx=ex+(dx/dl)*34, ty=ey-(dy/dl)*22;
+    add("rect",{x:tx-44,y:ty-19,width:88,height:38,rx:9,fill:"#fff",stroke:"#c0261f","stroke-width":2});
+    add("text",{x:tx,y:ty+1,"text-anchor":"middle","dominant-baseline":"middle",
+      "font-size":22,"font-weight":900,fill:"#c0261f"}, f(it.r)+" "+u());
+  }
+  add("text",{x:W/2,y:24,"text-anchor":"middle","font-size":17,"font-weight":800,fill:"#4a5560"}, podpis);
+  add("text",{x:W/2,y:H-12,"text-anchor":"middle","font-size":14,fill:"#9aa5b1"},
+    "strzałka pokazuje kierunek, liczba mówi o ile — długość strzałki jest umowna");
+  if(M.mirror) add("text",{x:W-10,y:24,"text-anchor":"end","font-size":15,"font-weight":800,fill:"#a86000"},"LUSTRO");
+  return svg;
+}
+
 /* rysunek: gdzie punkt jest, a gdzie ma być — kierunki zgodne z rzeczywistością,
    sama odchyłka narysowana z przesadą, żeby była widoczna */
 function moveSvg(x){
@@ -1674,6 +1753,10 @@ function renderLiveBox(){
   box.appendChild(el("div",{class:"msg "+(maxr<=M.tol.s?"g":"w")},
     maxr<=M.tol.s ? "Wszystkie wpisane narożniki mieszczą się w tolerancji "+fu(M.tol.s)+"."
                   : "Największe odchylenie: "+fu(maxr)+". Poprawki poniżej."));
+  var TG=placeNom("out",placement());
+  box.appendChild(arrowsSvg(slab(), got.map(function(g){
+    return {i:g.i, from:g.Q, to:TG[g.i], r:g.r};
+  }), "W którą stronę i o ile przesunąć narożniki"));
   got.forEach(function(x){
     var d=el("div",{class:"step"+(x.r<=M.tol.s?"":" bad")});
     d.appendChild(el("h4",null,"Narożnik "+x.k+" — róg "+cornerName(x.i)));
@@ -1784,11 +1867,13 @@ function renderCtrlBox(){
   for(var i=0;i<4;i++){
     var T={x:P[0].x+cs*N[i].x-sn*N[i].y, y:P[0].y+sn*N[i].x+cs*N[i].y};
     var ddx=T.x-P[i].x, ddy=T.y-P[i].y, rr=Math.sqrt(ddx*ddx+ddy*ddy);
-    maxr=Math.max(maxr,rr); items.push({k:LETTERS[i],dx:ddx,dy:ddy,r:rr});
+    maxr=Math.max(maxr,rr);
+    items.push({k:LETTERS[i],i:i,dx:ddx,dy:ddy,r:rr,from:P[i],to:T});
   }
   box.appendChild(el("div",{class:"msg "+(maxr<=M.tol.s?"g":"w")},
     maxr<=M.tol.s ? "Wytrasowany prostokąt mieści się w tolerancji."
       : "Poprawka przy nieruchomej linii A–B — największa "+fu(maxr)+"."));
+  box.appendChild(arrowsSvg(P, items, "W którą stronę i o ile przesunąć narożniki"));
   items.forEach(function(x){
     var e2=el("div",{class:"step"});
     var parts=[];
